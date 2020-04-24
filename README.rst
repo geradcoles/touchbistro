@@ -18,6 +18,7 @@ Install this program like you would any typical Python module from git::
 
     git clone git@github.com:geradcoles/touchbistro.git
     cd touchbistro
+    pip install -r requirements.txt
     python setup.py install # or develop if you plan on hacking code
 
 Paid Order Summary

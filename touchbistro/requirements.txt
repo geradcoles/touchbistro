@@ -1,0 +1,2 @@
+docopt
+-e git://github.com/geradcoles/lib7shifts.git#egg=lib7shifts
