@@ -24,6 +24,7 @@ from touchbistro import paidorder
 
 
 def print_summary(summary, delim='\t'):
+    "Output the payment summary using a specified delimiter"
     header_cols = ["Datetime", "Bill", "Order Type", "Payment Type", "Payments",
                    "Tips", "Net Sales"]
     print(delim.join(header_cols))

@@ -1,7 +1,6 @@
 """Module to handle queries on the ZPAIDORDER table
 """
 import logging
-from lib7shifts.dates import _get_epoch_ts_for_date
 from lib7shifts.cmd.common import Sync7Shifts2Sqlite
 from .dates import unixepoch_2_cocoa
 
