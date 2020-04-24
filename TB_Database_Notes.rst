@@ -10,6 +10,7 @@ an incremented foreign key (I'm inferring this from the data).
 Dates are not in a logical unixtime format or javascript date format natively
 supported by Sqlite3 and all other open source databases. Instead they are in
 Apple's Epoch Time (from Cocoa framework).
+
 - 1 January 2001 GMT is 0.0
 - Every second afterward adds 1 to the number.
 - Decimals are partial seconds.
@@ -19,20 +20,21 @@ Apple's Epoch Time (from Cocoa framework).
 
 ZPAIDORDER
 ==========
-# View closed bills
-SELECT
-    Z_PK,
-    ZI_BILLNUMBER,
-    ZI_TAKEOUTTYPE,
-    ZCLOSEDTAKEOUT,
-    ZORDER,
-    ZPAYMENTS,
-    ZPAYDATE,
-    ZSEATEDDATE
-    FROM ZPAIDORDER
-    WHERE Z_BILLNUMBER=12345;
+
+    SELECT
+        Z_PK,
+        ZI_BILLNUMBER,
+        ZI_TAKEOUTTYPE,
+        ZCLOSEDTAKEOUT,
+        ZORDER,
+        ZPAYMENTS,
+        ZPAYDATE,
+        ZSEATEDDATE
+        FROM ZPAIDORDER
+        WHERE Z_BILLNUMBER=12345;
 
 ZI_TAKEOUTTYPE is the equivalent of an ENUM:
+
 - Blank = a regular, dine-in order
 - 0 = Takeout (including custom types)
 - 1 = Delivery
