@@ -13,7 +13,7 @@ def readme():
 setup(
     name='touchbistro',
     version="0.1",
-    description='Tools for reading and reporting from TouchBistro's Sqlite3 database',
+    description='Tools for reading and reporting from TouchBistro Sqlite3 database',
     long_description=readme(),
     author='Prairie Dog Brewing CANADA Inc',
     author_email='gerad@prairiedogbrewing.ca',
