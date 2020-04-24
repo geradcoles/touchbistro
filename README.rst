@@ -5,9 +5,11 @@ For reading a TouchBistro Sqlite3 database and creating reports that are not
 currently present through the cloud.
 
 IMPORTANT: Always run this tool against a copy of the TouchBistro Sqlite3
-   database. Bad things could happen if this report runs queries that lock the
-   active database while TouchBistro is using it, possibly destroying your
-   restaurant point of sale.
+database.
+
+Bad things could happen if this report runs queries that lock the
+active database while TouchBistro is using it, possibly destroying your
+restaurant point of sale.
 
 Installation
 ------------
