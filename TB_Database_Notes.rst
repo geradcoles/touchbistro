@@ -148,20 +148,14 @@ PUTTING IT ALL TOGETHER
 Get a list of paid orders for April 2, 2020 in MDT::
 
     SELECT
-        (ZPAIDORDER.ZPAYDATE + 978307200) as EpochDate,
-        (ZPAYMENT.ZI_AMOUNT + 0.0) as Amount
+        (ZPAIDORDER.ZPAYDATE + 978307200) as Timestamp,
+        ZPAIDORDER.ZI_BILLNUMBER as Bill,
+        ZPAIDORDER.ZI_TAKEOUTTYPE as Order_Type,
+        ZPAYMENT.ZCARDTYPE as Payment_Type,
+        ifnull(round(ZPAYMENT.ZI_AMOUNT, 2), 0.0) as Payments,
+        ifnull(round(ZPAYMENT.ZTIP, 2), 0.0) as Total_Tips
     FROM ZPAIDORDER
     LEFT JOIN ZPAYMENT ON ZPAYMENT.ZPAYMENTGROUP = ZPAIDORDER.ZPAYMENTS
     WHERE
         ZPAIDORDER.ZPAYDATE >= 607500000.0 AND
         ZPAIDORDER.ZPAYDATE < 607586400.0;
-
-In code::
-
-    import os
-    import touchbistro.paidorder
-    foo = touchbistro.paidorder.PaidOrderSummary(
-        os.environ.get('TB_DB_PATH'),
-        earliest=607500000.0, cutoff=607586400.0)
-    for row in foo.summary():
-    print("{}: {}".format(row['EpochDate'], row['Amount']))

@@ -21,7 +21,7 @@ setup(
     packages=find_packages(),
     install_requires=[],
     scripts=[
-        #'bin/loan-repayment',
+        'bin/payments',
     ],
     test_suite="nose.collector",
 )

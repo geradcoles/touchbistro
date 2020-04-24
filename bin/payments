@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+"""Get a payment summary from TouchBistro for the given date range.
+
+Usage:
+    payments [options] --from=YYYY-MM-DD --to=YYYY-MM-DD <db_path>
+
+Options:
+
+ --from=YYYY-MM-DD     The start of the date range to report on
+ --to=YYYY-MM-DD       The end of the date range to report on (inclusive)
+ -d, --debug    Print detailed debug logging
+ --csv          Output in CSV
+
+Default output will be columnar format.
+
+"""
+
+import sys
+import logging
+from datetime import datetime, timedelta
+from docopt import docopt
+from lib7shifts.dates import get_local_tz, to_local_date
+from touchbistro import paidorder
+
+
+def print_summary(summary, delim='\t'):
+    header_cols = ["Datetime", "Bill", "Order Type", "Payment Type", "Payments",
+                   "Tips", "Net Sales"]
+    print(delim.join(header_cols))
+    for row in summary:
+        date = datetime.fromtimestamp(row['Timestamp'])
+        date = date.replace(tzinfo=get_local_tz())
+        date = date.strftime('%Y-%m-%d %H:%M:%S')
+        order_type = paidorder.takeout_type_pretty(row['Order_Type'])
+        net_sales = row['Payments'] - row['Total_Tips']
+        print(f"{date}{delim}{row['Bill']:d}{delim}{order_type}{delim}{row['Payment_Type']}{delim}{row['Payments']:0.2f}{delim}{row['Total_Tips']:0.2f}{delim}{net_sales:0.2f}")
+
+
+if __name__ == '__main__':
+    ARGS = docopt(__doc__, version='7shifts-load-sales 0.1')
+    logging.basicConfig()
+
+    if ARGS.get('--debug', False):
+        print(ARGS, file=sys.stderr)
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    SUMMARY = paidorder.PaidOrders(
+        ARGS.get('<db_path>'),
+        earliest=to_local_date(ARGS.get('--from')).timestamp(),
+        cutoff=(
+            to_local_date(ARGS.get('--to')) + timedelta(days=1)).timestamp()
+    ).get_results()
+
+    if ARGS.get('--csv'):
+        print_summary(SUMMARY, delim=',')
+    else:
+        print_summary(SUMMARY)
+    sys.exit(0)
