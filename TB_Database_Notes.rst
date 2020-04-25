@@ -19,6 +19,117 @@ Apple's Epoch Time (from Cocoa framework), so conversion is necessary.
 TABLE INFORMATION
 =================
 
+ZMENUITEM
+---------
+
+Schema::
+
+    CREATE TABLE ZMENUITEM (
+        Z_PK INTEGER PRIMARY KEY,
+        Z_ENT INTEGER,
+        Z_OPT INTEGER,
+        ZBACKGROUNDCOLOR INTEGER,
+        ZI_COURSE INTEGER,
+        ZI_EXCLUDETAX1 INTEGER,
+        ZI_EXCLUDETAX2 INTEGER,
+        ZI_EXCLUDETAX3 INTEGER,
+        ZI_HIDDEN INTEGER,
+        ZI_INDEX INTEGER,
+        ZI_WINEID INTEGER,
+        ZINSTOCK INTEGER,
+        ZISARCHIVED INTEGER,
+        ZISRETURNABLE INTEGER,
+        ZPRINTSEPERATECHIT INTEGER,
+        ZREQUIREMANAGER INTEGER,
+        ZSHOWINPUBLICMENU INTEGER,
+        ZTYPE INTEGER,
+        ZUSERECIPECOST INTEGER,
+        ZUSEDFORGIFTCARDS INTEGER,
+        ZCATEGORY INTEGER,
+        ZREQUIRESVALIDATIONONKIOSK INTEGER,
+        ZRESTAURANT INTEGER,
+        ZACTUALCOST FLOAT,
+        ZAPPROXCOOKINGTIME FLOAT,
+        ZCREATEDATE TIMESTAMP,
+        ZI_COUNT FLOAT,
+        ZI_PRICE FLOAT,
+        ZI_WARNCOUNT FLOAT,
+        ZVERSION TIMESTAMP,
+        ZCATEGORYNAME VARCHAR,
+        ZCATEGORYUUID VARCHAR,
+        ZI_FULLIMAGE VARCHAR,
+        ZI_PARENTUUID VARCHAR,
+        ZI_THUMBIMAGE VARCHAR,
+        ZITEMDESCRIPTION VARCHAR,
+        ZNAME VARCHAR,
+        ZPUBLICMENUCLOUDIMAGEFULLURL VARCHAR,
+        ZPUBLICMENUCLOUDIMAGETHUMBNAILURL VARCHAR,
+        ZRECIPE VARCHAR,
+        ZSHORTNAME VARCHAR,
+        ZUPC VARCHAR,
+        ZUUID VARCHAR );
+
+
+ZORDERITEM
+----------
+
+Schema::
+
+    CREATE TABLE ZORDERITEM (
+        Z_PK INTEGER PRIMARY KEY,
+        Z_ENT INTEGER,
+        Z_OPT INTEGER,
+        ZI_COURSE INTEGER,
+        ZI_INDEX INTEGER,
+        ZI_SEND INTEGER,
+        ZI_SENT INTEGER,
+        ZISRETURN INTEGER,
+        ZMENUITEM INTEGER,
+        ZMENUPAGE INTEGER,
+        ZCREATEDATE TIMESTAMP,
+        ZI_OPENPRICE FLOAT,
+        ZI_QUANTITY FLOAT,
+        ZMENUITEMCOST FLOAT,
+        ZONLINEORDERPRICE FLOAT,
+        ZRECIPECOST FLOAT,
+        ZSENTTIME TIMESTAMP,
+        ZMENUITEMUUID VARCHAR,
+        ZUUID VARCHAR,
+        ZWAITERID VARCHAR );
+
+ZMENUITEMUUID is the uuid of the menu item.
+
+ZWAITERID is the uuid of the staff member.
+
+
+ZORDERITEMLOG
+-------------
+
+Contains a record of each item that was part of an order.
+
+Schema::
+
+    CREATE TABLE ZORDERITEMLOG (
+        Z_PK INTEGER PRIMARY KEY,
+        Z_ENT INTEGER,
+        Z_OPT INTEGER,
+        ZCREATEDATE TIMESTAMP,
+        ZMENUITEMVERSION TIMESTAMP,
+        ZORDERITEMCREATEDATE TIMESTAMP,
+        ZQUANTITY FLOAT,
+        ZTOTALPRICEWITHMODIFIERS FLOAT,
+        ZMANAGER VARCHAR,
+        ZMENUITEM VARCHAR,
+        ZORDERNUMBER VARCHAR,
+        ZUUID VARCHAR,
+        ZWAITER VARCHAR );
+
+ZMENUITEM contains the UUID of the menu item.
+
+ZORDERNUMBER is the customer-facing order ID.
+
+ZWAITER is the UUID of the staff member.
+
 ZPAIDORDER
 ----------
 This is a central table in the TouchBistro DB architecture. It links many
@@ -126,20 +237,57 @@ ZI_TAKEOUTTYPE is the equivalent of an ENUM:
 
 Z_PK and ZI_BILLNUMBER are usually the same.
 
-ZCLOSEDTAKEOUT is a foreign key to Z_CLOSEDTAKEOUT (Z_PK).
+ZCLOSEDTAKEOUT is a foreign key to table Z_CLOSEDTAKEOUT (Z_PK).
 
 ZORDER is not the same as the order id for the order. It appears to be a
 different key, likely because orders can have splits.
 
 ZPAYMENTS is a reference to the ZPAYMENTS table (Z_PK).
 
+ZORDER
+------
+
+Schema::
+
+    CREATE TABLE ZORDER (
+        Z_PK INTEGER PRIMARY KEY,
+        Z_ENT INTEGER,
+        Z_OPT INTEGER,
+        ZBILLNUMBER INTEGER,
+        ZI_EXCLUDETAX1 INTEGER,
+        ZI_EXCLUDETAX2 INTEGER,
+        ZI_EXCLUDETAX3 INTEGER,
+        ZI_INDEX INTEGER,
+        ZPAIDORDER INTEGER,
+        ZPARTY INTEGER,
+        ZPARTYASSPLITORDER INTEGER,
+        ZTEMPPARTY INTEGER,
+        ZCREATEDATE TIMESTAMP,
+        ZI_SPLITBY FLOAT,
+        ZGROUPCOLORHEXSTRING VARCHAR,
+        ZNOTE VARCHAR,
+        ZORDERNUMBER VARCHAR,
+        ZUUID VARCHAR,
+        ZLOYALTYTRANSACTIONXREFID VARCHAR);
+    CREATE INDEX ZORDER_ZPAIDORDER_INDEX ON ZORDER (ZPAIDORDER);
+    CREATE INDEX ZORDER_ZPARTY_INDEX ON ZORDER (ZPARTY);
+    CREATE INDEX ZORDER_ZPARTYASSPLITORDER_INDEX ON ZORDER (ZPARTYASSPLITORDER);
+    CREATE INDEX ZORDER_ZTEMPPARTY_INDEX ON ZORDER (ZTEMPPARTY);
+    CREATE INDEX Z_Order_uuid ON ZORDER (ZUUID COLLATE BINARY ASC);
+
+ZPAIDORDER has the foreign key to the ZPAIDORDER table.
+
+ZORDERNUMBER contains the staff-visible order number.
+
 Z_CLOSEDTAKEOUT
 ---------------
+
 - Row per takeout order, including bar tabs and deliveries.
 - This is where you'll find a foreign key to ZCUSTOMTAKEOUTYPE (Z_PK)
 
 Z_CUSTOMTAKEOUTTYPE
 -------------------
+
 - Defines custom takeout types (ZNAME is helpful here)
 
 PUTTING IT ALL TOGETHER

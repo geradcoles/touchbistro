@@ -25,16 +25,24 @@ from touchbistro import paidorder
 
 def print_summary(summary, delim='\t'):
     "Output the payment summary using a specified delimiter"
-    header_cols = ["Datetime", "Bill", "Order Type", "Payment Type", "Payments",
-                   "Tips", "Net Sales"]
+    header_cols = ["Datetime", "Bill", "Name", "Order Type", "Payment Type",
+                   "Loyalty_Account_Name", "Payments", "Tips", "Net Sales"]
     print(delim.join(header_cols))
     for row in summary:
         date = datetime.fromtimestamp(row['Timestamp'])
         date = date.replace(tzinfo=get_local_tz())
         date = date.strftime('%Y-%m-%d %H:%M:%S')
-        order_type = paidorder.takeout_type_pretty(row['Order_Type'])
-        net_sales = row['Payments'] - row['Total_Tips']
-        print(f"{date}{delim}{row['Bill']:d}{delim}{order_type}{delim}{row['Payment_Type']}{delim}{row['Payments']:0.2f}{delim}{row['Total_Tips']:0.2f}{delim}{net_sales:0.2f}")
+        net_sales = row['ZI_AMOUNT'] - row['ZTIP']
+        print((
+            f"{date}{delim}"
+            f"{row['ZI_BILLNUMBER']:d}{delim}"
+            f"{row['ZTABLENAME']}{delim}"
+            f"{row['ORDER_TYPE']}{delim}"
+            f"{row['ZCARDTYPE']}{delim}"
+            f"{row['ZLOYALTYACCOUNTNAME']}{delim}"
+            f"{row['ZI_AMOUNT']:0.2f}{delim}"
+            f"{row['ZTIP']:0.2f}{delim}"
+            f"{net_sales:0.2f}"))
 
 
 if __name__ == '__main__':

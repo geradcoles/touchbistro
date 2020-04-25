@@ -32,11 +32,19 @@ class PaidOrders(Sync7Shifts2Sqlite):
 
     QUERY_PAID_ORDER_SUMMARY = """SELECT
             (ZPAIDORDER.ZPAYDATE + 978307200) as Timestamp,
-            ZPAIDORDER.ZI_BILLNUMBER as Bill,
-            ZPAIDORDER.ZI_TAKEOUTTYPE as Order_Type,
-            ZPAYMENT.ZCARDTYPE as Payment_Type,
-            ifnull(round(ZPAYMENT.ZI_AMOUNT, 2), 0.0) as Payments,
-            ifnull(round(ZPAYMENT.ZTIP, 2), 0.0) as Total_Tips
+            ZPAIDORDER.*,
+            CASE ZPAIDORDER.ZI_TAKEOUTTYPE
+                WHEN 2
+                    THEN 'bartab'
+                WHEN 1
+                    THEN 'delivery'
+                WHEN 0
+                    THEN 'takeout'
+                ELSE 'dinein'
+            END ORDER_TYPE,
+            ZPAYMENT.ZCARDTYPE,
+            ifnull(round(ZPAYMENT.ZI_AMOUNT, 2), 0.0) as ZI_AMOUNT,
+            ifnull(round(ZPAYMENT.ZTIP, 2), 0.0) as ZTIP
         FROM ZPAIDORDER
         LEFT JOIN ZPAYMENT ON ZPAYMENT.ZPAYMENTGROUP = ZPAIDORDER.ZPAYMENTS
         WHERE
