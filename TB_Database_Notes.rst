@@ -237,6 +237,8 @@ ZI_TAKEOUTTYPE is the equivalent of an ENUM:
 
 Z_PK and ZI_BILLNUMBER are usually the same.
 
+ZI_TAX1 is a percentage of tax on the amount (aka 0.05 for GST).
+
 ZCLOSEDTAKEOUT is a foreign key to table Z_CLOSEDTAKEOUT (Z_PK).
 
 ZORDER is not the same as the order id for the order. It appears to be a
@@ -278,6 +280,83 @@ Schema::
 ZPAIDORDER has the foreign key to the ZPAIDORDER table.
 
 ZORDERNUMBER contains the staff-visible order number.
+
+ZPAYMENT
+--------
+
+Lists individual payments.
+
+Schema::
+
+    CREATE TABLE ZPAYMENT (
+        Z_PK INTEGER PRIMARY KEY,
+        Z_ENT INTEGER,
+        Z_OPT INTEGER,
+        ZI_INDEX INTEGER,
+        ZI_TYPE INTEGER,
+        ZACCOUNT INTEGER,
+        ZCUSTOMER INTEGER,
+        ZPAYMENTGATEWAYTRANSACTIONINFO INTEGER,
+        ZPAYMENTGROUP INTEGER,
+        ZBALANCE FLOAT,
+        ZCREATEDATE TIMESTAMP,
+        ZI_AMOUNT FLOAT,
+        ZI_CHANGE FLOAT,
+        ZTIP FLOAT,
+        ZAUTH VARCHAR,
+        ZCARDEXPIRY VARCHAR,
+        ZCARDHOLDER VARCHAR,
+        ZCARDNUMBER VARCHAR,
+        ZCARDTYPE VARCHAR,
+        ZMERCURYRESPONSEBASE64 VARCHAR,
+        ZUUID VARCHAR,
+        ZI_REFUNDABLEAMOUNT FLOAT,
+        ZORIGINALPAYMENTUUID VARCHAR);
+    CREATE INDEX ZPAYMENT_ZACCOUNT_INDEX ON ZPAYMENT (ZACCOUNT);
+    CREATE INDEX ZPAYMENT_ZCUSTOMER_INDEX ON ZPAYMENT (ZCUSTOMER);
+    CREATE INDEX ZPAYMENT_ZPAYMENTGATEWAYTRANSACTIONINFO_INDEX ON ZPAYMENT (ZPAYMENTGATEWAYTRANSACTIONINFO);
+    CREATE INDEX ZPAYMENT_ZPAYMENTGROUP_INDEX ON ZPAYMENT (ZPAYMENTGROUP);
+    CREATE INDEX Z_Payment_uuid ON ZPAYMENT (ZUUID COLLATE BINARY ASC);
+
+ZI_TYPE appears to be an enum-like value.
+
+- 0 = Cash
+- 1 = Electronic payment including Loyalty Card and custom manual payment types
+- 4 = Customer Account
+
+ZACCOUNT is foreign key to ZTBACCOUNT (Z_PK).
+
+ZCUSTOMER appears to be blank for customer account payments.
+
+ZPAYMENTGROUP is a foreign key to ZPAYMENTS (Z_PK).
+
+ZI_AMOUNT is the dollar amount of the transaction.
+
+ZI_CHANGE is the change given.
+
+ZTIP is the amount of any tips rung in.
+
+ZAUTH is the auth number for the transaction, when present.
+
+ZPAYMENTS
+---------
+
+This table lists all payments for for a given order ID (from the ZPAIDORDER
+table). A quick lookup table, not necessary when using joins, but good for
+subselects.
+
+ZTBACCOUNT
+----------
+
+A list of customer accounts.
+
+ZBALANCE is the current account balance (inverted value as it is a debt).
+
+ZNAME is the customer name.
+
+ZNOTE is the account notes field.
+
+ZNUMBER is the phone number associated with the account.
 
 Z_CLOSEDTAKEOUT
 ---------------
