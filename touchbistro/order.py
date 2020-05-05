@@ -4,6 +4,7 @@ etc.
 import logging
 from lib7shifts.cmd.common import Sync7Shifts2Sqlite
 from .dates import cocoa_2_datetime
+from .discount import ItemDiscount
 
 
 def takeout_type_pretty(value):
@@ -59,7 +60,9 @@ class Order(Sync7Shifts2Sqlite):
                 ELSE 'dinein'
             END TAKEOUT_TYPE,
             ZPAIDORDER.ZBILLRANGE, ZPAIDORDER.ZCLOSEDTAKEOUT,
-            ZPAIDORDER.ZPAYMENTS, ZWAITER.ZDISPLAYNAME AS WAITERNAME,
+            ZPAIDORDER.ZPAYMENTS,
+            ZWAITER.ZDISPLAYNAME AS WAITERNAME,
+            ZWAITER.ZUUID AS WAITER_UUID,
             ZPAYMENT.ZCARDTYPE,
             ZCUSTOMTAKEOUTTYPE.ZNAME as CUSTOMTAKEOUTTYPE,
             ifnull(round(ZPAYMENT.ZI_AMOUNT, 2), 0.0) as ZI_AMOUNT,
@@ -155,6 +158,7 @@ class OrderItem(Sync7Shifts2Sqlite):
         ZMENUCATEGORY.ZI_TAX3 AS MENU_CATEGORY_TAX3,
         ZORDERITEM.ZI_QUANTITY, ZMENUITEM.ZI_PRICE, ZORDERITEM.ZI_OPENPRICE,
         ZWAITER.ZDISPLAYNAME AS WAITERNAME,
+        ZWAITER.ZUUID AS WAITER_UUID,
         ZORDERITEM.ZI_COURSE AS ITEM_COURSE,
         ZMENUCATEGORY.ZI_COURSE AS MENU_CATEGORY_COURSE,
         ZORDERITEM.ZI_SENT, ZORDERITEM.ZSENTTIME
@@ -170,6 +174,14 @@ class OrderItem(Sync7Shifts2Sqlite):
         WHERE ZORDERITEM.Z_PK = :order_item_id
     """
 
+    #: Query to get a list of discount PK's for this order item
+    DISCOUNT_QUERY = """SELECT
+        Z_PK
+        FROM ZDISCOUNT
+        WHERE ZORDERITEM = :order_item_id
+        ORDER BY ZI_INDEX ASC
+        """
+
     def __init__(self, db_location, **kwargs):
         super(OrderItem, self).__init__(db_location, **kwargs)
         self.log = logging.getLogger("{}.{}".format(
@@ -177,6 +189,7 @@ class OrderItem(Sync7Shifts2Sqlite):
         ))
         self.order_item_id = kwargs.get('order_item_id')
         self._db_details = None
+        self._discounts = None
 
     @property
     def name(self):
@@ -244,6 +257,16 @@ class OrderItem(Sync7Shifts2Sqlite):
                 self._db_details[key] = result[key]
         return self._db_details
 
+    def discounts(self):
+        """Returns a list of ItemDiscount objects for this order item"""
+        if self._discounts is None:
+            self._discounts = list()
+            for row in self._fetch_discounts():
+                self._discounts.append(
+                    ItemDiscount(self._db_location,
+                                 discount_id=row['Z_PK']))
+        return self._discounts
+
     def _fetch_order_item(self):
         """Returns a summary list of dicts as per the class summary"""
         bindings = {
@@ -251,6 +274,15 @@ class OrderItem(Sync7Shifts2Sqlite):
         return self.db_handle.cursor().execute(
             self.QUERY, bindings
         ).fetchone()
+
+    def _fetch_discounts(self):
+        """Returns a list of discount primary keys from the DB for this order
+        item"""
+        bindings = {
+            'order_item_id': self.order_item_id}
+        return self.db_handle.cursor().execute(
+            self.DISCOUNT_QUERY, bindings
+        ).fetchall()
 
     def __str__(self):
         "Provide a nice string representation of the Order Item"
