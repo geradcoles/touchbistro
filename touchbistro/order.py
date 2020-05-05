@@ -249,6 +249,14 @@ class Order(Sync7Shifts2Sqlite):
                         order_item_id=row['ORDERITEM_ID']))
         return self._order_items
 
+    def subtotal(self):
+        """Returns the total value of all order line items minus discounts plus
+        modifiers. Taxes not included"""
+        total = 0.0
+        for order in self.order_items:
+            total += order.subtotal()
+        return total
+
     def _fetch_order(self):
         """Returns a summary list of dicts as per the class summary"""
         bindings = {
@@ -397,7 +405,7 @@ class OrderItem(Sync7Shifts2Sqlite):
             return True
         return False
 
-    def net_value(self):
+    def subtotal(self):
         """Returns the total value for the line item, by:
 
             - Multiplying quantity by menu item price
