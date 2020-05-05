@@ -256,6 +256,7 @@ class OrderItem(Sync7Shifts2Sqlite):
         "Provide a nice string representation of the Order Item"
         return(
             f"OrderItem(\n"
+            f"  order_item_id: {self.order_item_id}\n"
             f"  name: {self.name}\n"
             f"  menu_category_name: {self.menu_category_name}\n"
             f"  sales_category_name: {self.sales_category_name}\n"
