@@ -1,0 +1,39 @@
+#!/usr/bin/env python
+"""Get order details from TouchBistro.
+
+Usage:
+    order [options] fetch <order_number> <db_path>
+
+Options:
+
+ -d, --debug    Print detailed debug logging
+ -j, --json     Output a JSON summary for the order
+
+"""
+
+import sys
+import logging
+import json
+from docopt import docopt
+from touchbistro.order import Order
+
+
+if __name__ == '__main__':
+    ARGS = docopt(__doc__, version='7shifts-load-sales 0.1')
+    logging.basicConfig()
+
+    if ARGS.get('--debug', False):
+        print(ARGS, file=sys.stderr)
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    ORDER = Order(
+        ARGS.get('<db_path>'),
+        order_number=int(ARGS.get('<order_number>'))
+    )
+
+    if ARGS.get('--json'):
+        print(json.dumps(
+            ORDER.summary(), indent=4, sort_keys=True, default=str))
+    else:
+        raise NotImplementedError('Coming soon')
+    sys.exit(0)
