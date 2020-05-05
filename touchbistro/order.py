@@ -117,7 +117,10 @@ class Order(Sync7Shifts2Sqlite):
     @property
     def bill_number(self):
         "Return the bill number for this order"
-        return self.db_details['ZI_BILLNUMBER']
+        try:
+            return self.db_details['ZI_BILLNUMBER']
+        except KeyError:
+            return None
 
     @property
     def party_as_split_order(self):
@@ -127,12 +130,18 @@ class Order(Sync7Shifts2Sqlite):
     @property
     def party_name(self):
         "Return the party name for this order"
-        return self.db_details['ZPARTYNAME']
+        try:
+            return self.db_details['ZPARTYNAME']
+        except KeyError:
+            return None
 
     @property
     def table_name(self):
         "Returns the table name for the order"
-        return self.db_details['ZTABLENAME']
+        try:
+            return self.db_details['ZTABLENAME']
+        except KeyError:
+            return None
 
     @property
     def paid_datetime(self):
@@ -146,12 +155,18 @@ class Order(Sync7Shifts2Sqlite):
     @property
     def order_type(self):
         "Returns the order type, aka 'takeout', 'dine-in', 'delivery', etc"
-        return self.db_details['TAKEOUT_TYPE']
+        try:
+            return self.db_details['TAKEOUT_TYPE']
+        except KeyError:
+            return None
 
     @property
     def custom_takeout_type(self):
         "Returns the custom takeout type associated with a takeout order"
-        return self.db_details['CUSTOMTAKEOUTTYPE']
+        try:
+            return self.db_details['CUSTOMTAKEOUTTYPE']
+        except KeyError:
+            return None
 
     @property
     def payment_amount(self):
@@ -199,7 +214,10 @@ class Order(Sync7Shifts2Sqlite):
     @property
     def waiter_name(self):
         "Returns the display name of the waiter that closed the bill"
-        return self.db_details['WAITERNAME']
+        try:
+            return self.db_details['WAITERNAME']
+        except KeyError:
+            return None
 
     @property
     def db_details(self):
@@ -233,9 +251,12 @@ class Order(Sync7Shifts2Sqlite):
 
     def receipt_form(self):
         """Prints the order in a receipt-like format"""
-        datetime = self.paid_datetime.strftime('%Y-%m-%d %I:%M:%S %p')
+        try:
+            datetime = self.paid_datetime.strftime('%Y-%m-%d %I:%M:%S %p')
+        except AttributeError:
+            datetime = "None"
         output = (
-            f"        ORDER DETAILS FOR ORDER #{self.order_number}\n\n"
+            f"\n        ORDER DETAILS FOR ORDER #{self.order_number}\n\n"
             f"Order Date/Time:     \t{datetime}\n"
             f"Table Name: {self.table_name}\tParty Name: {self.party_name}\n"
             f"Bill Number: {self.bill_number}\tOrder Type: {self.order_type}\n"
