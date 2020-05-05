@@ -112,6 +112,10 @@ class ItemDiscount(Sync7Shifts2Sqlite):
             self.QUERY, bindings
         ).fetchone()
 
+    def receipt_form(self):
+        """Print the discount in a format suitable for receipts"""
+        return f"- ${self.amount:3.2f}: {self.description}\n"
+
     def summary(self):
         """Returns a dictionary containing a summary of this discount"""
         summary = {'meta': dict()}

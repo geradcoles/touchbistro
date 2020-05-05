@@ -35,9 +35,12 @@ class ItemModifier(Sync7Shifts2Sqlite):
 
     #: Query to get details about this discount
     QUERY = """SELECT
-        *
+        ZMODIFIER.*,
+        ZMENUITEM.ZNAME AS MENU_ITEM_NAME
         FROM ZMODIFIER
-        WHERE ZUUID = :modifier_uuid
+        LEFT JOIN ZMENUITEM ON
+            ZMENUITEM.Z_PK = ZMODIFIER.ZMENUITEM
+        WHERE ZMODIFIER.ZUUID = :modifier_uuid
         """
 
     def __init__(self, db_location, **kwargs):
@@ -103,6 +106,8 @@ class ItemModifier(Sync7Shifts2Sqlite):
     @property
     def name(self):
         "Returns the name associated with the modifier (incl custom text)"
+        if self.menu_item_id:
+            return self.db_details['MENU_ITEM_NAME']
         return self.db_details['ZI_NAME']
 
     @property
@@ -123,6 +128,22 @@ class ItemModifier(Sync7Shifts2Sqlite):
         return self.db_handle.cursor().execute(
             self.QUERY, bindings
         ).fetchone()
+
+    def receipt_form(self):
+        """Output the modifier in a form suitable for receipts and chits"""
+        try:
+            output = "+ "
+            if self.price > 0:
+                output += f"${self.price:3.2f}: "
+            output += f"{self.name}\n"
+            return output
+        except Exception as err:
+            raise RuntimeError(
+                "Caught exception while processing modifier {}:\n{}".format(
+                    self.modifier_uuid,
+                    err
+                )
+            )
 
     def summary(self):
         """Returns a dictionary summary of this modifier"""

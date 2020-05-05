@@ -65,6 +65,7 @@ class Order(Sync7Shifts2Sqlite):
             ZWAITER.ZDISPLAYNAME AS WAITERNAME,
             ZWAITER.ZUUID AS WAITER_UUID,
             ZPAYMENT.ZCARDTYPE,
+            ZPAYMENT.ZAUTH,
             ZCUSTOMTAKEOUTTYPE.ZNAME as CUSTOMTAKEOUTTYPE,
             ifnull(round(ZPAYMENT.ZI_AMOUNT, 2), 0.0) as ZI_PAYMENT_AMOUNT,
             ifnull(round(ZPAYMENT.ZTIP, 2), 0.0) as ZTIP_AMOUNT
@@ -102,38 +103,6 @@ class Order(Sync7Shifts2Sqlite):
         self.order_number = kwargs.get('order_number')
         self._db_details = None
         self._order_items = None
-
-    def summary(self):
-        """Returns a dictionary summary of order information, such as order
-        meta (time, waiter, ID), and a list of order items, including pricing,
-        discounts, and modifier information.
-
-        Output is a dict with these parent keys:
-
-        - meta: contains a dict with order metadata
-        - items: contains a list of summary dicts for each order item
-        - payment: contains a dictionary of payment information for the order
-
-        """
-        output = {'meta': dict(), 'order_items': list(), 'payment': dict()}
-        meta_fields = [
-            'order_uuid',
-            'order_number', 'order_type', 'table_name',
-            'bill_number', 'order_uuid', 'party_name', 'party_as_split_order',
-            'custom_takeout_type',
-        ]
-        for field in meta_fields:
-            output['meta'][field] = getattr(self, field)
-        payment_fields = [
-            'paid_datetime', 'loyalty_account_name', 'loyalty_credit_balance',
-            'loyalty_point_balance', 'outstanding_balance', 'card_type',
-            'waiter_name', 'payment_amount', 'tip_amount'
-        ]
-        for field in payment_fields:
-            output['payment'][field] = getattr(self, field)
-        for orderitem in self.order_items:
-            output['order_items'].append(orderitem.summary())
-        return output
 
     @property
     def order_uuid(self):
@@ -205,6 +174,11 @@ class Order(Sync7Shifts2Sqlite):
         return self.db_details['ZCARDTYPE']
 
     @property
+    def auth_number(self):
+        """When payment cards are used, return the card authorization #"""
+        return self.db_details['ZAUTH']
+
+    @property
     def loyalty_account_name(self):
         """Returns the name associated with a Loyalty account used to pay the
         order (if that was the case)"""
@@ -256,6 +230,85 @@ class Order(Sync7Shifts2Sqlite):
         for order in self.order_items:
             total += order.subtotal()
         return total
+
+    def receipt_form(self):
+        """Prints the order in a receipt-like format"""
+        datetime = self.paid_datetime.strftime('%Y-%m-%d %I:%M:%S %p')
+        output = (
+            f"        ORDER DETAILS FOR ORDER #{self.order_number}\n\n"
+            f"Order Date/Time:     \t{datetime}\n"
+            f"Table Name: {self.table_name}\tParty Name: {self.party_name}\n"
+            f"Bill Number: {self.bill_number}\tOrder Type: {self.order_type}\n"
+            f"Server Name: {self.waiter_name}\n"
+        )
+        if self.custom_takeout_type:
+            output += f"Takeout Type: {self.custom_takeout_type}\n"
+        output += f"\n-----------------------------------------------\n\n"
+        for order_item in self.order_items:
+            output += order_item.receipt_form() + "\n"
+        output += "\n"
+        subtotal = self.subtotal()
+        output += (
+            f"-----------------------------------------------\n"
+            f"                            Subtotal:  ${subtotal:3.2f}\n"
+            f"                                 Tax:  TODO\n"
+            f"-----------------------------------------------\n"
+            f"                               TOTAL:  ${subtotal:3.2f}\n"
+            f"                            Gratuity:  "
+            f"${self.tip_amount:3.2f}\n"
+            f"                      Payment Amount:  "
+            f"${self.payment_amount:3.2f}\n"
+            f"                 Outstanding Balance:  "
+            f"${self.outstanding_balance:3.2f}\n"
+        )
+        if self.card_type:
+            output += ("                           Card Type:  "
+                       f"{self.card_type.upper()}\n")
+        if self.loyalty_credit_balance:
+            output += (f"              Loyalty Credit Balance:  "
+                       "${self.loyalty_credit_balance:3.2f}\n")
+        if self.loyalty_point_balance:
+            output += (f"               Loyalty Point Balance:  "
+                       "${self.loyalty_point_balance:3.2f}\n")
+        output += "\n"
+        if self.loyalty_account_name:
+            output += f"Loyalty Customer: {self.loyalty_account_name}\n"
+        if self.auth_number:
+            output += f"Auth #: {self.auth_number}\n"
+        output += "\n"
+        return output
+
+    def summary(self):
+        """Returns a dictionary summary of order information, such as order
+        meta (time, waiter, ID), and a list of order items, including pricing,
+        discounts, and modifier information.
+
+        Output is a dict with these parent keys:
+
+        - meta: contains a dict with order metadata
+        - items: contains a list of summary dicts for each order item
+        - payment: contains a dictionary of payment information for the order
+
+        """
+        output = {'meta': dict(), 'order_items': list(), 'payment': dict()}
+        meta_fields = [
+            'order_uuid',
+            'order_number', 'order_type', 'table_name',
+            'bill_number', 'party_name', 'party_as_split_order',
+            'custom_takeout_type',
+        ]
+        for field in meta_fields:
+            output['meta'][field] = getattr(self, field)
+        payment_fields = [
+            'paid_datetime', 'loyalty_account_name', 'loyalty_credit_balance',
+            'loyalty_point_balance', 'outstanding_balance', 'card_type',
+            'waiter_name', 'payment_amount', 'tip_amount', 'auth_number'
+        ]
+        for field in payment_fields:
+            output['payment'][field] = getattr(self, field)
+        for orderitem in self.order_items:
+            output['order_items'].append(orderitem.summary())
+        return output
 
     def _fetch_order(self):
         """Returns a summary list of dicts as per the class summary"""
@@ -398,6 +451,27 @@ class OrderItem(Sync7Shifts2Sqlite):
         for discount in self.get_discounts():
             summary['discounts'].append(discount.summary())
         return summary
+
+    def receipt_form(self):
+        """Return a receipt-formatted string for this line item, like this:
+
+        2 x Some Menu Item Name                             $22.00
+            + Some free modifier
+            + $2.00: Some non-free modifier
+
+        """
+        output = ""
+        name = ""
+        if self.quantity > 1:
+            name += f"{self.quantity} x "
+        name += self.name
+        output += "{:38s} ${:3.2f}\n".format(
+            name, self.subtotal())
+        for discount in self.get_discounts():
+            output += "  " + discount.receipt_form()
+        for modifier in self.get_modifiers():
+            output += "  " + modifier.receipt_form()
+        return output
 
     def was_sent(self):
         "Returns True if the menu item was sent to the kitchen/bar"
