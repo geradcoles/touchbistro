@@ -6,6 +6,7 @@ from lib7shifts.cmd.common import Sync7Shifts2Sqlite
 from .dates import cocoa_2_datetime
 from .discount import ItemDiscount
 from .modifier import ItemModifier
+from .payment import Payment
 
 
 def takeout_type_pretty(value):
@@ -64,16 +65,10 @@ class Order(Sync7Shifts2Sqlite):
             ZPAIDORDER.ZPAYMENTS,
             ZWAITER.ZDISPLAYNAME AS WAITERNAME,
             ZWAITER.ZUUID AS WAITER_UUID,
-            ZPAYMENT.ZCARDTYPE,
-            ZPAYMENT.ZAUTH,
-            ZCUSTOMTAKEOUTTYPE.ZNAME as CUSTOMTAKEOUTTYPE,
-            ifnull(round(ZPAYMENT.ZI_AMOUNT, 2), 0.0) as ZI_PAYMENT_AMOUNT,
-            ifnull(round(ZPAYMENT.ZTIP, 2), 0.0) as ZTIP_AMOUNT
+            ZCUSTOMTAKEOUTTYPE.ZNAME as CUSTOMTAKEOUTTYPE
         FROM ZORDER
         LEFT JOIN ZPAIDORDER ON
             ZPAIDORDER.Z_PK = ZORDER.ZPAIDORDER
-        LEFT JOIN ZPAYMENT ON
-            ZPAYMENT.ZPAYMENTGROUP = ZPAIDORDER.ZPAYMENTS
         LEFT JOIN ZCLOSEDTAKEOUT ON
             ZCLOSEDTAKEOUT.Z_PK = ZPAIDORDER.ZCLOSEDTAKEOUT
         LEFT JOIN ZCUSTOMTAKEOUTTYPE ON
@@ -87,12 +82,21 @@ class Order(Sync7Shifts2Sqlite):
     #: This query results in a list of order item ID numbers (foreign key into
     #: the ZORDERITEM table)
     LIST_ORDER_ITEM_QUERY = """SELECT
-        Z_52I_ORDERITEMS.Z_53I_ORDERITEMS AS ORDERITEM_ID
+            Z_52I_ORDERITEMS.Z_53I_ORDERITEMS AS ORDERITEM_ID
         FROM Z_52I_ORDERITEMS
         LEFT JOIN ZORDERITEM ON
             ZORDERITEM.Z_PK = Z_52I_ORDERITEMS.Z_53I_ORDERITEMS
         WHERE Z_52I_ORDERITEMS.Z_52I_ORDERS = :z_order_id
         ORDER BY ZORDERITEM.ZI_INDEX ASC
+    """
+
+    #: This query fetches UUIDs for all payments for the paid order, in order
+    #: of occurrence.
+    LIST_ORDER_PAYMENT_QUERY = """SELECT
+            ZUUID AS PAYMENT_UUID
+        FROM ZPAYMENT
+        WHERE ZPAYMENTGROUP = :payment_group_id
+        ORDER BY ZI_INDEX
     """
 
     def __init__(self, db_location, **kwargs):
@@ -103,6 +107,7 @@ class Order(Sync7Shifts2Sqlite):
         self.order_number = kwargs.get('order_number')
         self._db_details = None
         self._order_items = None
+        self._payments = None
 
     @property
     def order_uuid(self):
@@ -169,29 +174,14 @@ class Order(Sync7Shifts2Sqlite):
             return None
 
     @property
-    def payment_amount(self):
-        """Returns the payment amount for paid orders"""
-        return self.db_details['ZI_PAYMENT_AMOUNT']
-
-    @property
-    def tip_amount(self):
-        """Returns the tip amount for paid orders"""
-        return self.db_details['ZTIP_AMOUNT']
+    def payment_group_id(self):
+        "Returns the ID for the payment group associated with this order"
+        return self.db_details['ZPAYMENTS']
 
     @property
     def outstanding_balance(self):
         """Returns the outstanding balance amount for the order"""
         return self.db_details['ZOUTSTANDINGBALANCE']
-
-    @property
-    def card_type(self):
-        """When payment cards are used, return the card type"""
-        return self.db_details['ZCARDTYPE']
-
-    @property
-    def auth_number(self):
-        """When payment cards are used, return the card authorization #"""
-        return self.db_details['ZAUTH']
 
     @property
     def loyalty_account_name(self):
@@ -241,6 +231,19 @@ class Order(Sync7Shifts2Sqlite):
                         order_item_id=row['ORDERITEM_ID']))
         return self._order_items
 
+    @property
+    def payments(self):
+        "Lazy-load Payment objects for this order and cache them internally"
+        if self._payments is None:
+            self._payments = list()
+            for row in self._fetch_payments():
+                self._payments.append(
+                    Payment(
+                        self._db_location,
+                        payment_uuid=row['PAYMENT_UUID'])
+                )
+        return self._payments
+
     def subtotal(self):
         """Returns the total value of all order line items minus discounts plus
         modifiers. Taxes not included"""
@@ -256,7 +259,7 @@ class Order(Sync7Shifts2Sqlite):
         except AttributeError:
             datetime = "None"
         output = (
-            f"\n        ORDER DETAILS FOR ORDER #{self.order_number}\n\n"
+            f"\n       ORDER DETAILS FOR ORDER #{self.order_number}\n\n"
             f"Order Date/Time:     \t{datetime}\n"
             f"Table Name: {self.table_name}\tParty Name: {self.party_name}\n"
             f"Bill Number: {self.bill_number}\tOrder Type: {self.order_type}\n"
@@ -275,28 +278,18 @@ class Order(Sync7Shifts2Sqlite):
             f"                                 Tax:  TODO\n"
             f"-----------------------------------------------\n"
             f"                               TOTAL:  ${subtotal:3.2f}\n"
-            f"                            Gratuity:  "
-            f"${self.tip_amount:3.2f}\n"
-            f"                      Payment Amount:  "
-            f"${self.payment_amount:3.2f}\n"
-            f"                 Outstanding Balance:  "
-            f"${self.outstanding_balance:3.2f}\n"
         )
-        if self.card_type:
-            output += ("                           Card Type:  "
-                       f"{self.card_type.upper()}\n")
-        if self.loyalty_credit_balance:
-            output += (f"              Loyalty Credit Balance:  "
-                       "${self.loyalty_credit_balance:3.2f}\n")
-        if self.loyalty_point_balance:
-            output += (f"               Loyalty Point Balance:  "
-                       "${self.loyalty_point_balance:3.2f}\n")
+        for payment in self.payments:
+            output += payment.receipt_form()
         output += "\n"
         if self.loyalty_account_name:
             output += f"Loyalty Customer: {self.loyalty_account_name}\n"
-        if self.auth_number:
-            output += f"Auth #: {self.auth_number}\n"
-        output += "\n"
+        if self.loyalty_credit_balance:
+            output += (f"Loyalty Credit Balance:  "
+                       f"${self.loyalty_credit_balance:3.2f}\n")
+        if self.loyalty_point_balance:
+            output += (f"Loyalty Point Balance:  "
+                       f"${self.loyalty_point_balance:3.2f}\n")
         return output
 
     def summary(self):
@@ -311,24 +304,30 @@ class Order(Sync7Shifts2Sqlite):
         - payment: contains a dictionary of payment information for the order
 
         """
-        output = {'meta': dict(), 'order_items': list(), 'payment': dict()}
+        output = {'meta': dict(), 'order_items': list(), 'payments': list()}
         meta_fields = [
-            'order_uuid',
+            'order_uuid', 'outstanding_balance',
             'order_number', 'order_type', 'table_name',
             'bill_number', 'party_name', 'party_as_split_order',
-            'custom_takeout_type',
+            'custom_takeout_type', 'waiter_name', 'paid_datetime'
         ]
         for field in meta_fields:
             output['meta'][field] = getattr(self, field)
-        payment_fields = [
-            'paid_datetime', 'loyalty_account_name', 'loyalty_credit_balance',
-            'loyalty_point_balance', 'outstanding_balance', 'card_type',
-            'waiter_name', 'payment_amount', 'tip_amount', 'auth_number'
-        ]
-        for field in payment_fields:
-            output['payment'][field] = getattr(self, field)
         for orderitem in self.order_items:
             output['order_items'].append(orderitem.summary())
+        for payment in self.payments:
+            output['payments'].append(payment.summary())
+        # these are payment fields that are part of the base order, not from
+        # ZPAYMENTS.
+        loyalty_fields = [
+            'loyalty_account_name', 'loyalty_credit_balance',
+            'loyalty_point_balance'
+        ]
+        loyalty_info = dict()
+        for field in loyalty_fields:
+            loyalty_info[field] = getattr(self, field)
+        if loyalty_info:
+            output['meta']['loyalty_info'] = loyalty_info
         return output
 
     def _fetch_order(self):
@@ -345,6 +344,14 @@ class Order(Sync7Shifts2Sqlite):
             'z_order_id': self.order_id}
         return self.db_handle.cursor().execute(
             self.LIST_ORDER_ITEM_QUERY, bindings).fetchall()
+
+    def _fetch_payments(self):
+        """Returns an iterable of database results for payments associated
+        with this order"""
+        bindings = {
+            'payment_group_id': self.payment_group_id}
+        return self.db_handle.cursor().execute(
+            self.LIST_ORDER_PAYMENT_QUERY, bindings).fetchall()
 
 
 class OrderItem(Sync7Shifts2Sqlite):
@@ -487,11 +494,18 @@ class OrderItem(Sync7Shifts2Sqlite):
             name += f"{self.quantity} x "
         name += self.name
         output += "{:38s} ${:3.2f}\n".format(
-            name, self.subtotal())
+            name, self.base_price())
+        has_price_mod = False
         for discount in self.get_discounts():
             output += "  " + discount.receipt_form()
+            if discount.amount:
+                has_price_mod = True
         for modifier in self.get_modifiers():
             output += "  " + modifier.receipt_form()
+            if modifier.price:
+                has_price_mod = True
+        if has_price_mod:
+            output += ' ' * 23 + f"Item Subtotal:  ${self.subtotal():3.2f}\n"
         return output
 
     def was_sent(self):
@@ -499,6 +513,14 @@ class OrderItem(Sync7Shifts2Sqlite):
         if self.db_details['ZI_SENT']:
             return True
         return False
+
+    def base_price(self):
+        """Return the price of this line item before applying discounts and
+        modifiers, taking into account quantity"""
+        price = self.original_price
+        if self.open_price:
+            price = self.open_price
+        return self.quantity * price
 
     def subtotal(self):
         """Returns the total value for the line item, by:
@@ -508,10 +530,7 @@ class OrderItem(Sync7Shifts2Sqlite):
             - Adding any modifier pricing
 
         Tax is not included by default"""
-        price = self.original_price
-        if self.open_price:
-            price = self.open_price
-        amount = self.quantity * price
+        amount = self.base_price()
         amount -= self.discount_total()
         amount += self.modifier_total()
         return amount
