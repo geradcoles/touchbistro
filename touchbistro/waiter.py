@@ -87,6 +87,15 @@ class Waiter(Sync7Shifts2Sqlite):
             self.QUERY, bindings
         ).fetchone()
 
+    def summary(self):
+        """Returns a dictionary of attributes about this waiter"""
+        summary = {'meta': dict()}
+        fields = ['waiter_uuid', 'waiter_id', 'display_name', 'firstname',
+                  'lastname', 'email']
+        for field in fields:
+            summary['meta'][field] = getattr(self, field)
+        return summary
+
     def __str__(self):
         "Return a pretty string to represent the waiter"
         return (

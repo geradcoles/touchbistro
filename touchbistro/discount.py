@@ -13,14 +13,14 @@ class ItemDiscount(Sync7Shifts2Sqlite):
     Required kwargs:
 
         - db_location: path to the database file
-        - discount_id: the Z_PK primary key for this discount
+        - discount_uuid: the UUID for this discount
     """
 
     #: Query to get details about this discount
     QUERY = """SELECT
         *
         FROM ZDISCOUNT
-        WHERE Z_PK = :discount_id
+        WHERE ZUUID = :discount_uuid
         """
 
     def __init__(self, db_location, **kwargs):
@@ -28,13 +28,13 @@ class ItemDiscount(Sync7Shifts2Sqlite):
         self.log = logging.getLogger("{}.{}".format(
             self.__class__.__module__, self.__class__.__name__
         ))
-        self.discount_id = kwargs.get('discount_id')
+        self.discount_uuid = kwargs.get('discount_uuid')
         self._db_details = None
 
     @property
-    def uuid(self):
-        "Returns the unique identifier for this discount, aside from Z_PK"
-        return self.db_details['ZUUID']
+    def discount_id(self):
+        "Returns the Z_PK ID for this discount (ZUUID better for fetch)"
+        return self.db_details['Z_PK']
 
     @property
     def discount_type(self):
@@ -107,17 +107,28 @@ class ItemDiscount(Sync7Shifts2Sqlite):
     def _fetch_discount(self):
         """Returns the db row for this discount"""
         bindings = {
-            'discount_id': self.discount_id}
+            'discount_uuid': self.discount_uuid}
         return self.db_handle.cursor().execute(
             self.QUERY, bindings
         ).fetchone()
+
+    def summary(self):
+        """Returns a dictionary containing a summary of this discount"""
+        summary = {'meta': dict()}
+        fields = ['discount_uuid', 'discount_id', 'datetime', 'amount',
+                  'discount_type', 'description', 'returns_inventory',
+                  'taxable',
+                  'order_item_id', 'waiter_uuid', 'authorizer_uuid']
+        for field in fields:
+            summary['meta'][field] = getattr(self, field)
+        return summary
 
     def __str__(self):
         """Return a pretty string-version of the class"""
         return(
             f"ItemDiscount(\n"
+            f"  uuid: {self.discount_uuid}\n"
             f"  discount_id: {self.discount_id}\n"
-            f"  uuid: {self.uuid}\n"
             f"  datetime: {self.datetime}\n"
             f"  amount: {self.amount}\n"
             f"  discount_type: {self.discount_type}\n"

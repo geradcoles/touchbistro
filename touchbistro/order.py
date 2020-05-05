@@ -5,6 +5,7 @@ import logging
 from lib7shifts.cmd.common import Sync7Shifts2Sqlite
 from .dates import cocoa_2_datetime
 from .discount import ItemDiscount
+from .modifier import ItemModifier
 
 
 def takeout_type_pretty(value):
@@ -34,12 +35,12 @@ class Order(Sync7Shifts2Sqlite):
     #: public-facing order ID number.
     ORDER_QUERY = """SELECT
             ZORDER.Z_PK,
-            ZORDER.ZBILLNUMBER, ZORDER.ZPARTY, ZORDER.ZPARTYASSPLITORDER,
+            ZORDER.ZPARTY, ZORDER.ZPARTYASSPLITORDER,
             ZORDER.ZCREATEDATE, ZORDER.ZI_SPLITBY, ZORDER.ZORDERNUMBER,
             ZORDER.ZUUID AS Z_ORDER_UUID, ZORDER.ZLOYALTYTRANSACTIONXREFID,
             ZORDER.ZI_EXCLUDETAX1, ZORDER.ZI_EXCLUDETAX2,
             ZORDER.ZI_EXCLUDETAX3,
-            ZPAIDORDER.ZPAYDATE,
+            ZPAIDORDER.ZPAYDATE, ZPAIDORDER.ZI_BILLNUMBER,
             ZPAIDORDER.ZI_GRATUITYBEFORETAX, ZPAIDORDER.ZI_GRATUITY,
             ZPAIDORDER.ZI_REDUCEDTAX1, ZPAIDORDER.ZI_REDUCEDTAX1BILLAMOUNT,
             ZPAIDORDER.ZI_REDUCEDTAX2, ZPAIDORDER.ZI_REDUCEDTAX2BILLAMOUNT,
@@ -65,8 +66,8 @@ class Order(Sync7Shifts2Sqlite):
             ZWAITER.ZUUID AS WAITER_UUID,
             ZPAYMENT.ZCARDTYPE,
             ZCUSTOMTAKEOUTTYPE.ZNAME as CUSTOMTAKEOUTTYPE,
-            ifnull(round(ZPAYMENT.ZI_AMOUNT, 2), 0.0) as ZI_AMOUNT,
-            ifnull(round(ZPAYMENT.ZTIP, 2), 0.0) as ZTIP
+            ifnull(round(ZPAYMENT.ZI_AMOUNT, 2), 0.0) as ZI_PAYMENT_AMOUNT,
+            ifnull(round(ZPAYMENT.ZTIP, 2), 0.0) as ZTIP_AMOUNT
         FROM ZORDER
         LEFT JOIN ZPAIDORDER ON
             ZPAIDORDER.Z_PK = ZORDER.ZPAIDORDER
@@ -79,6 +80,7 @@ class Order(Sync7Shifts2Sqlite):
         LEFT JOIN ZWAITER ON
             ZWAITER.ZUUID = ZPAIDORDER.ZWAITERUUID
         WHERE ZORDER.ZORDERNUMBER = :order_number
+        ORDER BY ZORDER.Z_PK DESC LIMIT 1 /* there can be more than 1 */
     """
 
     #: This query results in a list of order item ID numbers (foreign key into
@@ -98,18 +100,142 @@ class Order(Sync7Shifts2Sqlite):
             self.__class__.__module__, self.__class__.__name__
         ))
         self.order_number = kwargs.get('order_number')
-        self._order_info = None
+        self._db_details = None
         self._order_items = None
 
+    def summary(self):
+        """Returns a dictionary summary of order information, such as order
+        meta (time, waiter, ID), and a list of order items, including pricing,
+        discounts, and modifier information.
+
+        Output is a dict with these parent keys:
+
+        - meta: contains a dict with order metadata
+        - items: contains a list of summary dicts for each order item
+        - payment: contains a dictionary of payment information for the order
+
+        """
+        output = {'meta': dict(), 'order_items': list(), 'payment': dict()}
+        meta_fields = [
+            'order_uuid',
+            'order_number', 'order_type', 'table_name',
+            'bill_number', 'order_uuid', 'party_name', 'party_as_split_order',
+            'custom_takeout_type',
+        ]
+        for field in meta_fields:
+            output['meta'][field] = getattr(self, field)
+        payment_fields = [
+            'paid_datetime', 'loyalty_account_name', 'loyalty_credit_balance',
+            'loyalty_point_balance', 'outstanding_balance', 'card_type',
+            'waiter_name', 'payment_amount', 'tip_amount'
+        ]
+        for field in payment_fields:
+            output['payment'][field] = getattr(self, field)
+        for orderitem in self.order_items:
+            output['order_items'].append(orderitem.summary())
+        return output
+
     @property
-    def order_info(self):
+    def order_uuid(self):
+        "Return the UUID for this order"
+        return self.db_details['Z_ORDER_UUID']
+
+    @property
+    def order_id(self):
+        "Returns the Z_PK ID for this order (not the customer-facing number)"
+        return self.db_details['Z_PK']
+
+    @property
+    def bill_number(self):
+        "Return the bill number for this order"
+        return self.db_details['ZI_BILLNUMBER']
+
+    @property
+    def party_as_split_order(self):
+        "Return the value of ZPARTYASSPLITORDER for this order"
+        return self.db_details['ZPARTYASSPLITORDER']
+
+    @property
+    def party_name(self):
+        "Return the party name for this order"
+        return self.db_details['ZPARTYNAME']
+
+    @property
+    def table_name(self):
+        "Returns the table name for the order"
+        return self.db_details['ZTABLENAME']
+
+    @property
+    def paid_datetime(self):
+        """Returns a Python Datetime object with local timezone corresponding
+        to the time that the order was paid"""
+        try:
+            return cocoa_2_datetime(self.db_details['ZPAYDATE'])
+        except TypeError:
+            return None
+
+    @property
+    def order_type(self):
+        "Returns the order type, aka 'takeout', 'dine-in', 'delivery', etc"
+        return self.db_details['TAKEOUT_TYPE']
+
+    @property
+    def custom_takeout_type(self):
+        "Returns the custom takeout type associated with a takeout order"
+        return self.db_details['CUSTOMTAKEOUTTYPE']
+
+    @property
+    def payment_amount(self):
+        """Returns the payment amount for paid orders"""
+        return self.db_details['ZI_PAYMENT_AMOUNT']
+
+    @property
+    def tip_amount(self):
+        """Returns the tip amount for paid orders"""
+        return self.db_details['ZTIP_AMOUNT']
+
+    @property
+    def outstanding_balance(self):
+        """Returns the outstanding balance amount for the order"""
+        return self.db_details['ZOUTSTANDINGBALANCE']
+
+    @property
+    def card_type(self):
+        """When payment cards are used, return the card type"""
+        return self.db_details['ZCARDTYPE']
+
+    @property
+    def loyalty_account_name(self):
+        """Returns the name associated with a Loyalty account used to pay the
+        order (if that was the case)"""
+        return self.db_details['ZLOYALTYACCOUNTNAME']
+
+    @property
+    def loyalty_credit_balance(self):
+        """Returns the credit balance of the Loyalty account used to pay the
+        order (if that was the case)"""
+        return self.db_details['ZLOYALTYCREDITBALANCE']
+
+    @property
+    def loyalty_point_balance(self):
+        """Returns the point balance of the Loyalty account used to pay the
+        order (if that was the case)"""
+        return self.db_details['ZLOYALTYPOINTSBALANCE']
+
+    @property
+    def waiter_name(self):
+        "Returns the display name of the waiter that closed the bill"
+        return self.db_details['WAITERNAME']
+
+    @property
+    def db_details(self):
         "Lazy-load order info from DB on first request, cache it after that"
-        if self._order_info is None:
-            self._order_info = dict()
+        if self._db_details is None:
+            self._db_details = dict()
             result = self._fetch_order()
             for key in result.keys():
-                self._order_info[key] = result[key]
-        return self._order_info
+                self._db_details[key] = result[key]
+        return self._db_details
 
     @property
     def order_items(self):
@@ -134,7 +260,7 @@ class Order(Sync7Shifts2Sqlite):
         """Returns an iterable of database results for order items associated
         with this order"""
         bindings = {
-            'z_order_id': self.order_info['Z_PK']}
+            'z_order_id': self.order_id}
         return self.db_handle.cursor().execute(
             self.LIST_ORDER_ITEM_QUERY, bindings).fetchall()
 
@@ -176,9 +302,17 @@ class OrderItem(Sync7Shifts2Sqlite):
 
     #: Query to get a list of discount PK's for this order item
     DISCOUNT_QUERY = """SELECT
-        Z_PK
+        ZUUID
         FROM ZDISCOUNT
         WHERE ZORDERITEM = :order_item_id
+        ORDER BY ZI_INDEX ASC
+        """
+
+    #: Query to get a list of modifier UUID's for this order item
+    MODIFIER_QUERY = """SELECT
+        ZUUID
+        FROM ZMODIFIER
+        WHERE ZCONTAINERORDERITEM = :order_item_id
         ORDER BY ZI_INDEX ASC
         """
 
@@ -190,6 +324,7 @@ class OrderItem(Sync7Shifts2Sqlite):
         self.order_item_id = kwargs.get('order_item_id')
         self._db_details = None
         self._discounts = None
+        self._modifiers = None
 
     @property
     def name(self):
@@ -241,11 +376,42 @@ class OrderItem(Sync7Shifts2Sqlite):
             return cocoa_2_datetime(self.db_details['ZSENTTIME'])
         return None
 
+    def summary(self):
+        """Returns a dictionary summary of this order item"""
+        summary = {
+            'meta': dict(), 'modifiers': list(), 'discounts': list()}
+        fields = ['order_item_id', 'name', 'menu_category_name',
+                  'sales_category_name', 'quantity', 'original_price',
+                  'open_price', 'waiter_name', 'course_number', 'sent_time']
+        for field in fields:
+            summary['meta'][field] = getattr(self, field)
+        for modifier in self.get_modifiers():
+            summary['modifiers'].append(modifier.summary())
+        for discount in self.get_discounts():
+            summary['discounts'].append(discount.summary())
+        return summary
+
     def was_sent(self):
         "Returns True if the menu item was sent to the kitchen/bar"
         if self.db_details['ZI_SENT']:
             return True
         return False
+
+    def net_value(self):
+        """Returns the total value for the line item, by:
+
+            - Multiplying quantity by menu item price
+            - Subtracting the discount total
+            - Adding any modifier pricing
+
+        Tax is not included by default"""
+        price = self.original_price
+        if self.open_price:
+            price = self.open_price
+        amount = self.quantity * price
+        amount -= self.discount_total()
+        amount += self.modifier_total()
+        return amount
 
     @property
     def db_details(self):
@@ -257,15 +423,39 @@ class OrderItem(Sync7Shifts2Sqlite):
                 self._db_details[key] = result[key]
         return self._db_details
 
-    def discounts(self):
+    def get_discounts(self):
         """Returns a list of ItemDiscount objects for this order item"""
         if self._discounts is None:
             self._discounts = list()
             for row in self._fetch_discounts():
                 self._discounts.append(
                     ItemDiscount(self._db_location,
-                                 discount_id=row['Z_PK']))
+                                 discount_uuid=row['ZUUID']))
         return self._discounts
+
+    def get_modifiers(self):
+        """Returns a list of ItemModifier objects for this order item"""
+        if self._modifiers is None:
+            self._modifiers = list()
+            for row in self._fetch_modifiers():
+                self._modifiers.append(
+                    ItemModifier(self._db_location,
+                                 modifier_uuid=row['ZUUID']))
+        return self._modifiers
+
+    def discount_total(self):
+        """Returns the total discounted amount for this Order Item"""
+        amount = 0.0
+        for discount in self.get_discounts():
+            amount += discount.amount
+        return amount
+
+    def modifier_total(self):
+        "Returns the total value of all modifiers applied to this item"
+        amount = 0.0
+        for modifier in self.get_modifiers():
+            amount += modifier.price
+        return amount
 
     def _fetch_order_item(self):
         """Returns a summary list of dicts as per the class summary"""
@@ -276,12 +466,21 @@ class OrderItem(Sync7Shifts2Sqlite):
         ).fetchone()
 
     def _fetch_discounts(self):
-        """Returns a list of discount primary keys from the DB for this order
+        """Returns a list of discount uuids from the DB for this order
         item"""
         bindings = {
             'order_item_id': self.order_item_id}
         return self.db_handle.cursor().execute(
             self.DISCOUNT_QUERY, bindings
+        ).fetchall()
+
+    def _fetch_modifiers(self):
+        """Returns a list of modifier uuids from the DB for this order
+        item"""
+        bindings = {
+            'order_item_id': self.order_item_id}
+        return self.db_handle.cursor().execute(
+            self.MODIFIER_QUERY, bindings
         ).fetchall()
 
     def __str__(self):
