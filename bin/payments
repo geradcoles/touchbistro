@@ -25,8 +25,8 @@ from touchbistro import paidorder
 
 def print_summary(summary, delim='\t'):
     "Output the payment summary using a specified delimiter"
-    header_cols = ["Datetime", "Bill", "Name", "Order Type", "Takeout Type",
-                   "Payment Type",
+    header_cols = ["Datetime", "Bill", "Table Name", "Party Name", "Order Type",
+                   "Takeout Type", "Payment Type",
                    "Loyalty_Account_Name", "Payments", "Taxes", "Tips",
                    "Net Sales"]
     print(delim.join(header_cols))
@@ -39,6 +39,7 @@ def print_summary(summary, delim='\t'):
             f"{date}{delim}"
             f"{row['ZI_BILLNUMBER']:d}{delim}"
             f"{row['ZTABLENAME']}{delim}"
+            f"{row['ZPARTYNAME']}{delim}"
             f"{row['ORDER_TYPE']}{delim}"
             f"{row['CUSTOMTAKEOUTTYPE']}{delim}"
             f"{row['ZCARDTYPE']}{delim}"
