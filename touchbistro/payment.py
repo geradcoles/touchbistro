@@ -177,17 +177,16 @@ class Payment(Sync7Shifts2Sqlite):
 
     def receipt_form(self):
         """Output payment info in a form suitable for receipts"""
-        auth = ""
-        if self.auth_number:
-            auth = f"[{self.auth_number}]"
         pay_type = ""
         if self.payment_type == PAYMENT_TYPES[0]:  # cash
             pay_type = "CASH"
         else:
             pay_type = self.card_type.upper()
+        if self.auth_number:
+            pay_type += f" [{self.auth_number}]"
         output = (
-            f"Payment {self.payment_number:2d}: {pay_type:12s} "
-            f"{auth:8s}" + (' ' * 6) + f"${self.amount:3.2f}\n"
+            f"Payment {self.payment_number:2d}: {pay_type:20s} "
+            '      ' + f"${self.amount:3.2f}\n"
         )
         output += ' ' * 33 + f"Tip:  ${self.tip:3.2f}\n"
         output += ' ' * 19 + f"Remaining Balance:  ${self.balance:3.2f}\n"
