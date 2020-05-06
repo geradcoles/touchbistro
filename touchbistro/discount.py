@@ -4,6 +4,10 @@ from lib7shifts.cmd.common import Sync7Shifts2Sqlite
 from .dates import cocoa_2_datetime
 from .waiter import Waiter
 
+#: This tuple maps the ZI_TYPE column to whether or not this is a void
+#: or a discount (both are stored as discounts)
+DISCOUNT_TYPES = ("Void", "Discount")
+
 
 class ItemDiscount(Sync7Shifts2Sqlite):
     """This class represents a single discount on an OrderItem.
@@ -39,7 +43,7 @@ class ItemDiscount(Sync7Shifts2Sqlite):
     @property
     def discount_type(self):
         "Map to the ZI_TYPE colum for the discount"
-        return self.db_details['ZI_TYPE']
+        return DISCOUNT_TYPES[self.db_details['ZI_TYPE']]
 
     @property
     def description(self):
@@ -114,7 +118,9 @@ class ItemDiscount(Sync7Shifts2Sqlite):
 
     def receipt_form(self):
         """Print the discount in a format suitable for receipts"""
-        return f"- ${self.amount:3.2f}: {self.description}\n"
+        return (
+            f"- ${self.amount:.2f}: {self.description} "
+            f"{self.discount_type}\n")
 
     def summary(self):
         """Returns a dictionary containing a summary of this discount"""
