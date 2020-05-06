@@ -344,10 +344,10 @@ class Order(Sync7Shifts2Sqlite):
         if self.loyalty_account_name:
             output += f"Loyalty Customer: {self.loyalty_account_name}\n"
         if self.loyalty_credit_balance:
-            output += (f"Loyalty Credit Balance:  "
+            output += (f"Loyalty Credit Balance: "
                        f"${self.loyalty_credit_balance:3.2f}\n")
         if self.loyalty_point_balance:
-            output += (f"Loyalty Point Balance:  "
+            output += (f"Loyalty Point Balance: "
                        f"${self.loyalty_point_balance:3.2f}\n")
         return output
 
