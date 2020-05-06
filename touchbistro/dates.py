@@ -21,3 +21,8 @@ def cocoa_2_datetime(cocoatime):
     return datetime.fromtimestamp(cocoa_2_unixepoch(cocoatime)).replace(
         tzinfo=get_local_tz()
     )
+
+
+def datetime_2_cocoa(datetime_obj):
+    "Returns a cocoa epoch timestamp from a datetime object"
+    return unixepoch_2_cocoa(datetime_obj.timestamp())

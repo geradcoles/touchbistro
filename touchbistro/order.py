@@ -8,6 +8,7 @@ from .dates import cocoa_2_datetime
 from .discount import ItemDiscount
 from .modifier import ItemModifier
 from .payment import Payment
+from .menu import MenuItem
 
 
 def takeout_type_pretty(value):
@@ -301,14 +302,14 @@ class Order(Sync7Shifts2Sqlite):
         tax3 = decimal.Decimal(0.0)
         # work in cents to avoid penny rounding problems.
         order_subtotal = decimal.Decimal(order_item.subtotal() * 100)
-        if not order_item.exclude_tax_rate_1:
+        if not order_item.menu_item.exclude_tax1:
             tax1 += order_subtotal * decimal.Decimal(self.tax_rate_1)
-        if not order_item.exclude_tax_rate_2:
+        if not order_item.menu_item.exclude_tax2:
             taxable = order_subtotal
             if self.stack_tax_2_on_tax_1:
                 taxable += tax1
             tax2 += taxable * decimal.Decimal(self.tax_rate_2)
-        if not order_item.exclude_tax_rate_3:
+        if not order_item.menu_item.exclude_tax3:
             tax3 += order_subtotal * decimal.Decimal(self.tax_rate_3)
         return tax1 + tax2 + tax3
 
@@ -365,7 +366,7 @@ class Order(Sync7Shifts2Sqlite):
         """
         output = {'meta': dict(), 'order_items': list(), 'payments': list()}
         meta_fields = [
-            'order_uuid', 'outstanding_balance',
+            'order_uuid', 'order_id', 'outstanding_balance',
             'order_number', 'order_type', 'table_name',
             'bill_number', 'party_name', 'party_as_split_order',
             'custom_takeout_type', 'waiter_name', 'paid_datetime'
@@ -424,27 +425,13 @@ class OrderItem(Sync7Shifts2Sqlite):
     """
 
     QUERY = """SELECT
-        ZMENUITEM.ZNAME, ZMENUITEM.ZCATEGORYNAME AS ITEM_MENU_CATEGORY_NAME,
-        ZMENUITEM.ZI_EXCLUDETAX1, ZMENUITEM.ZI_EXCLUDETAX2,
-        ZMENUITEM.ZI_EXCLUDETAX3,
-        ZMENUCATEGORY.ZNAME AS MENU_CATEGORY_NAME,
-        ZITEMTYPE.ZNAME AS SALES_CATEGORY_NAME,
-        ZMENUCATEGORY.ZI_TAX1 AS MENU_CATEGORY_TAX1,
-        ZMENUCATEGORY.ZI_TAX2 AS MENU_CATEGORY_TAX2,
-        ZMENUCATEGORY.ZI_TAX3 AS MENU_CATEGORY_TAX3,
-        ZORDERITEM.ZI_QUANTITY, ZMENUITEM.ZI_PRICE, ZORDERITEM.ZI_OPENPRICE,
-        ZWAITER.ZDISPLAYNAME AS WAITERNAME,
-        ZWAITER.ZUUID AS WAITER_UUID,
-        ZORDERITEM.ZI_COURSE AS ITEM_COURSE,
-        ZMENUCATEGORY.ZI_COURSE AS MENU_CATEGORY_COURSE,
-        ZORDERITEM.ZI_SENT, ZORDERITEM.ZSENTTIME
+            ZORDERITEM.ZMENUITEMUUID,
+            ZORDERITEM.ZI_QUANTITY, ZORDERITEM.ZI_OPENPRICE,
+            ZWAITER.ZDISPLAYNAME AS WAITERNAME,
+            ZWAITER.ZUUID AS WAITER_UUID,
+            ZORDERITEM.ZI_COURSE AS ITEM_COURSE,
+            ZORDERITEM.ZI_SENT, ZORDERITEM.ZSENTTIME
         FROM ZORDERITEM
-        LEFT JOIN ZMENUITEM ON
-            ZMENUITEM.ZUUID = ZORDERITEM.ZMENUITEMUUID
-        LEFT JOIN ZMENUCATEGORY ON
-            ZMENUCATEGORY.ZUUID = ZMENUITEM.ZCATEGORYUUID
-        LEFT JOIN ZITEMTYPE ON
-            ZITEMTYPE.ZTYPEID = ZMENUITEM.ZTYPE
         LEFT JOIN ZWAITER ON
             ZWAITER.ZUUID = ZORDERITEM.ZWAITERID
         WHERE ZORDERITEM.Z_PK = :order_item_id
@@ -475,31 +462,12 @@ class OrderItem(Sync7Shifts2Sqlite):
         self._db_details = None
         self._discounts = None
         self._modifiers = None
-
-    @property
-    def name(self):
-        "Map to the appropriate DB result column for menu item name"
-        return self.db_details['ZNAME']
-
-    @property
-    def sales_category_name(self):
-        "Map to the appropriate DB result column for sales category name"
-        return self.db_details['SALES_CATEGORY_NAME']
-
-    @property
-    def menu_category_name(self):
-        "Map to the appropriate DB result column for menu category name"
-        return self.db_details['ITEM_MENU_CATEGORY_NAME']
+        self._menu_item = None
 
     @property
     def quantity(self):
         "Return the quantity associated with the order line item"
         return self.db_details['ZI_QUANTITY']
-
-    @property
-    def original_price(self):
-        "Return the pre-discount price of the menu item (tax-excluded)"
-        return self.db_details['ZI_PRICE']
 
     @property
     def open_price(self):
@@ -514,53 +482,35 @@ class OrderItem(Sync7Shifts2Sqlite):
     @property
     def course_number(self):
         """Return the course number for the menu item."""
-        if self.db_details['ITEM_COURSE'] >= 0:
-            return self.db_details['ITEM_COURSE']
-        return self.db_details['MENU_CATEGORY_COURSE']
+        return self.db_details['ITEM_COURSE']
 
     @property
     def sent_time(self):
         """Returns a Python Datetime object with local timezone corresponding
         to the time that the item was sent to the kitchen/bar (or None)"""
-        if self.was_sent():
+        if self.was_sent:
             return cocoa_2_datetime(self.db_details['ZSENTTIME'])
         return None
 
     @property
-    def exclude_tax_rate_1(self):
-        """Return the effective tax rate 1 for this order item"""
-        if self.db_details['ZI_EXCLUDETAX1']:
-            return True
-        return False
-
-    @property
-    def exclude_tax_rate_2(self):
-        """Return the effective tax rate 2 for this order item"""
-        if self.db_details['ZI_EXCLUDETAX2']:
-            return True
-        return False
-
-    @property
-    def exclude_tax_rate_3(self):
-        """Return the effective tax rate 3 for this order item"""
-        if self.db_details['ZI_EXCLUDETAX3']:
-            return True
-        return False
+    def menu_item(self):
+        """Return a MenuItem object corresponding to this OrderItem"""
+        if self._menu_item is None:
+            self._menu_item = MenuItem(
+                self._db_location,
+                menuitem_uuid=self.db_details['ZMENUITEMUUID'])
+        return self._menu_item
 
     def summary(self):
         """Returns a dictionary summary of this order item"""
         summary = {
-            'meta': dict(), 'modifiers': list(), 'discounts': list()}
-        fields = ['order_item_id', 'name', 'menu_category_name',
-                  'sales_category_name', 'quantity', 'original_price',
-                  'open_price', 'waiter_name', 'course_number', 'sent_time']
+            'meta': dict(), 'modifiers': list(), 'discounts': list(),
+            'menu_item': dict()}
+        fields = ['order_item_id', 'quantity',
+                  'open_price', 'waiter_name', 'was_sent', 'sent_time']
         for field in fields:
             summary['meta'][field] = getattr(self, field)
-        summary['meta']['taxes'] = {
-            'exclude_tax_rate_1': self.exclude_tax_rate_1,
-            'exclude_tax_rate_2': self.exclude_tax_rate_2,
-            'exclude_tax_rate_3': self.exclude_tax_rate_3,
-        }
+        summary['menu_item'] = self.menu_item.summary()
         for modifier in self.get_modifiers():
             summary['modifiers'].append(modifier.summary())
         for discount in self.get_discounts():
@@ -579,7 +529,7 @@ class OrderItem(Sync7Shifts2Sqlite):
         name = ""
         if self.quantity > 1:
             name += f"{self.quantity} x "
-        name += self.name
+        name += self.menu_item.name
         output += "{:38s} ${:3.2f}\n".format(
             name, self.base_price())
         has_price_mod = False
@@ -595,6 +545,7 @@ class OrderItem(Sync7Shifts2Sqlite):
             output += ' ' * 23 + f"Item Subtotal:  ${self.subtotal():3.2f}\n"
         return output
 
+    @property
     def was_sent(self):
         "Returns True if the menu item was sent to the kitchen/bar"
         if self.db_details['ZI_SENT']:
@@ -604,7 +555,7 @@ class OrderItem(Sync7Shifts2Sqlite):
     def base_price(self):
         """Return the price of this line item before applying discounts and
         modifiers, taking into account quantity"""
-        price = self.original_price
+        price = self.menu_item.price
         if self.open_price:
             price = self.open_price
         return self.quantity * price
@@ -697,12 +648,9 @@ class OrderItem(Sync7Shifts2Sqlite):
         return(
             f"OrderItem(\n"
             f"  order_item_id: {self.order_item_id}\n"
-            f"  name: {self.name}\n"
-            f"  menu_category_name: {self.menu_category_name}\n"
-            f"  sales_category_name: {self.sales_category_name}\n"
+            f"  name: {self.menu_item.name}\n"
             f"  quantity: {self.quantity}\n"
-            f"  original_price: {self.original_price}\n"
-            f"  open_price: {self.open_price}\n"
+            f"  base_price: {self.base_price}\n"
             f"  waiter_name: {self.waiter_name}\n"
             f"  course_number: {self.course_number}\n"
             f"  sent_time: {self.sent_time}\n"
