@@ -47,26 +47,26 @@ to the default, receipt-like view of an order::
     -----------------------------------------------
 
     Adult Chicken Tenders                  $15.00
-    - $7.50: Staff: Joe
-                            Item Subtotal:  $7.50
+    - $7.50: Staff: Joe Discount
+                        Item Subtotal:     $7.50
 
-    Popplers                                $7.00
-    - $3.50: Staff: Joe
-                            Item Subtotal:  $3.50
+    Popplers                               $7.00
+    - $3.50: Staff: Joe Discount
+                        Item Subtotal:     $3.50
 
-    Grizzly Paw Black Cherry                $4.00
-    - $4.00: Shift Beer
-                            Item Subtotal:  $0.00
+    Grizzly Paw Black Cherry               $4.00
+    - $4.00: Shift Joe Discount
+                        Item Subtotal:     $0.00
 
 
     -----------------------------------------------
-                                 Subtotal:  $11.00
-                                      Tax:  TODO
+                                Subtotal:  $11.00
+                                     Tax:  $0.55
     -----------------------------------------------
-                                    TOTAL:  $11.00
-    Payment  1: LOYALTY CARD [888]          $11.55
-                                      Tip:  $0.00
-                        Remaining Balance:  $0.00
+                                   TOTAL:  $11.55
+    Payment  1: LOYALTY CARD [819]         $11.55
+                                     Tip:  $0.00
+                       Remaining Balance:  $0.00
 
     Loyalty Customer: Joe Miller
     Loyalty Credit Balance:  $145.87
