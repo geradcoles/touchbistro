@@ -158,7 +158,7 @@ class MenuItem(Sync7Shifts2Sqlite):
         if self._sales_category is None:
             self._sales_category = SalesCategory(
                 self._db_location,
-                type_id=self.sales_category_type_id)
+                category_type_id=self.sales_category_type_id)
         return self._sales_category
 
     @property
