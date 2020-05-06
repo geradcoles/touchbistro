@@ -2,6 +2,7 @@
 etc.
 """
 import logging
+import decimal
 from lib7shifts.cmd.common import Sync7Shifts2Sqlite
 from .dates import cocoa_2_datetime
 from .discount import ItemDiscount
@@ -43,6 +44,7 @@ class Order(Sync7Shifts2Sqlite):
             ZORDER.ZI_EXCLUDETAX3,
             ZPAIDORDER.ZPAYDATE, ZPAIDORDER.ZI_BILLNUMBER,
             ZPAIDORDER.ZI_GRATUITYBEFORETAX, ZPAIDORDER.ZI_GRATUITY,
+            ZPAIDORDER.ZI_TAX2ONTAX1,
             ZPAIDORDER.ZI_REDUCEDTAX1, ZPAIDORDER.ZI_REDUCEDTAX1BILLAMOUNT,
             ZPAIDORDER.ZI_REDUCEDTAX2, ZPAIDORDER.ZI_REDUCEDTAX2BILLAMOUNT,
             ZPAIDORDER.ZI_REDUCEDTAX3, ZPAIDORDER.ZI_REDUCEDTAX3BILLAMOUNT,
@@ -108,6 +110,7 @@ class Order(Sync7Shifts2Sqlite):
         self._db_details = None
         self._order_items = None
         self._payments = None
+        self._taxes = None
 
     @property
     def order_uuid(self):
@@ -210,6 +213,28 @@ class Order(Sync7Shifts2Sqlite):
             return None
 
     @property
+    def stack_tax_2_on_tax_1(self):
+        """Return True if tax 2 should be stacked on tax 1 (tax on tax)"""
+        if self.db_details['ZI_TAX2ONTAX1']:
+            return True
+        return False
+
+    @property
+    def tax_rate_1(self):
+        """Returns tax rate 1 (ZI_TAX1) column, as a decimal float"""
+        return self.db_details['ZI_TAX1']
+
+    @property
+    def tax_rate_2(self):
+        """Returns tax rate 2 (ZI_TAX2) column, as a decimal float"""
+        return self.db_details['ZI_TAX2']
+
+    @property
+    def tax_rate_3(self):
+        """Returns tax rate 3 (ZI_TAX3) column, as a decimal float"""
+        return self.db_details['ZI_TAX3']
+
+    @property
     def db_details(self):
         "Lazy-load order info from DB on first request, cache it after that"
         if self._db_details is None:
@@ -252,6 +277,41 @@ class Order(Sync7Shifts2Sqlite):
             total += order.subtotal()
         return total
 
+    def taxes(self):
+        """Calculate order taxes based on order items and cache locally"""
+        if self._taxes is None:
+            with decimal.localcontext() as ctx:
+                ctx.rounding = decimal.ROUND_HALF_UP
+                taxes = decimal.Decimal(0.0)
+                for order in self.order_items:
+                    taxes += self._calc_tax_on_order_item(order)
+                total = float(taxes.to_integral_value()) / 100
+                self.log.debug("total tax on order: %3.2f", total)
+                self._taxes = total
+        return self._taxes
+
+    def total(self):
+        """Calculate the total value of the order, including taxes"""
+        return self.subtotal() + self.taxes()
+
+    def _calc_tax_on_order_item(self, order_item):
+        """Given an OrderItem, calculate the tax on the item, in CENTS"""
+        tax1 = decimal.Decimal(0.0)
+        tax2 = decimal.Decimal(0.0)
+        tax3 = decimal.Decimal(0.0)
+        # work in cents to avoid penny rounding problems.
+        order_subtotal = decimal.Decimal(order_item.subtotal() * 100)
+        if not order_item.exclude_tax_rate_1:
+            tax1 += order_subtotal * decimal.Decimal(self.tax_rate_1)
+        if not order_item.exclude_tax_rate_2:
+            taxable = order_subtotal
+            if self.stack_tax_2_on_tax_1:
+                taxable += tax1
+            tax2 += taxable * decimal.Decimal(self.tax_rate_2)
+        if not order_item.exclude_tax_rate_3:
+            tax3 += order_subtotal * decimal.Decimal(self.tax_rate_3)
+        return tax1 + tax2 + tax3
+
     def receipt_form(self):
         """Prints the order in a receipt-like format"""
         try:
@@ -271,13 +331,12 @@ class Order(Sync7Shifts2Sqlite):
         for order_item in self.order_items:
             output += order_item.receipt_form() + "\n"
         output += "\n"
-        subtotal = self.subtotal()
         output += (
             f"-----------------------------------------------\n"
-            f"                            Subtotal:  ${subtotal:3.2f}\n"
-            f"                                 Tax:  TODO\n"
+            f"                            Subtotal:  ${self.subtotal():3.2f}\n"
+            f"                                 Tax:  ${self.taxes():3.2f}\n"
             f"-----------------------------------------------\n"
-            f"                               TOTAL:  ${subtotal:3.2f}\n"
+            f"                               TOTAL:  ${self.total():3.2f}\n"
         )
         for payment in self.payments:
             output += payment.receipt_form()
@@ -366,6 +425,8 @@ class OrderItem(Sync7Shifts2Sqlite):
 
     QUERY = """SELECT
         ZMENUITEM.ZNAME, ZMENUITEM.ZCATEGORYNAME AS ITEM_MENU_CATEGORY_NAME,
+        ZMENUITEM.ZI_EXCLUDETAX1, ZMENUITEM.ZI_EXCLUDETAX2,
+        ZMENUITEM.ZI_EXCLUDETAX3,
         ZMENUCATEGORY.ZNAME AS MENU_CATEGORY_NAME,
         ZITEMTYPE.ZNAME AS SALES_CATEGORY_NAME,
         ZMENUCATEGORY.ZI_TAX1 AS MENU_CATEGORY_TAX1,
@@ -465,6 +526,27 @@ class OrderItem(Sync7Shifts2Sqlite):
             return cocoa_2_datetime(self.db_details['ZSENTTIME'])
         return None
 
+    @property
+    def exclude_tax_rate_1(self):
+        """Return the effective tax rate 1 for this order item"""
+        if self.db_details['ZI_EXCLUDETAX1']:
+            return True
+        return False
+
+    @property
+    def exclude_tax_rate_2(self):
+        """Return the effective tax rate 2 for this order item"""
+        if self.db_details['ZI_EXCLUDETAX2']:
+            return True
+        return False
+
+    @property
+    def exclude_tax_rate_3(self):
+        """Return the effective tax rate 3 for this order item"""
+        if self.db_details['ZI_EXCLUDETAX3']:
+            return True
+        return False
+
     def summary(self):
         """Returns a dictionary summary of this order item"""
         summary = {
@@ -474,6 +556,11 @@ class OrderItem(Sync7Shifts2Sqlite):
                   'open_price', 'waiter_name', 'course_number', 'sent_time']
         for field in fields:
             summary['meta'][field] = getattr(self, field)
+        summary['meta']['taxes'] = {
+            'exclude_tax_rate_1': self.exclude_tax_rate_1,
+            'exclude_tax_rate_2': self.exclude_tax_rate_2,
+            'exclude_tax_rate_3': self.exclude_tax_rate_3,
+        }
         for modifier in self.get_modifiers():
             summary['modifiers'].append(modifier.summary())
         for discount in self.get_discounts():
@@ -496,13 +583,13 @@ class OrderItem(Sync7Shifts2Sqlite):
         output += "{:38s} ${:3.2f}\n".format(
             name, self.base_price())
         has_price_mod = False
-        for discount in self.get_discounts():
-            output += "  " + discount.receipt_form()
-            if discount.amount:
-                has_price_mod = True
         for modifier in self.get_modifiers():
             output += "  " + modifier.receipt_form()
             if modifier.price:
+                has_price_mod = True
+        for discount in self.get_discounts():
+            output += "  " + discount.receipt_form()
+            if discount.amount:
                 has_price_mod = True
         if has_price_mod:
             output += ' ' * 23 + f"Item Subtotal:  ${self.subtotal():3.2f}\n"
