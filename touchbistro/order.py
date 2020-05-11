@@ -2,7 +2,7 @@
 etc.
 """
 import decimal
-from .base import TouchBistroDB
+from .base import TouchBistroDB, ItemList
 from .dates import cocoa_2_datetime
 from .discount import ItemDiscountList
 from .modifier import ItemModifierList
@@ -42,7 +42,7 @@ class Order(TouchBistroDB):
 
     #: Query to get as much information about an order as possible based on its
     #: public-facing order ID number.
-    ORDER_QUERY = """SELECT
+    QUERY = """SELECT
             ZORDER.Z_PK,
             ZORDER.ZPARTY, ZORDER.ZPARTYASSPLITORDER,
             ZORDER.ZCREATEDATE, ZORDER.ZI_SPLITBY, ZORDER.ZORDERNUMBER,
@@ -232,12 +232,10 @@ class Order(TouchBistroDB):
     def order_items(self):
         "Lazy-load order items on the first attempt to read them, then cache"
         if self._order_items is None:
-            self._order_items = list()
-            for row in self._fetch_order_items():
-                self._order_items.append(
-                    OrderItem(
-                        self._db_location,
-                        order_item_id=row['ORDERITEM_ID']))
+            self._order_items = OrderItemList(
+                self._db_location,
+                order_id=self.order_id
+            )
         return self._order_items
 
     @property
@@ -253,10 +251,7 @@ class Order(TouchBistroDB):
     def subtotal(self):
         """Returns the total value of all order line items minus discounts plus
         modifiers. Taxes not included"""
-        total = 0.0
-        for order in self.order_items:
-            total += order.subtotal()
-        return total
+        return self.order_items.subtotal()
 
     def taxes(self):
         """Calculate order taxes based on order items and cache locally"""
@@ -345,10 +340,7 @@ class Order(TouchBistroDB):
 
         """
         output = super(Order, self).summary()
-        self.log.debug(output)
-        output['order_items'] = list()
-        for orderitem in self.order_items:
-            output['order_items'].append(orderitem.summary())
+        output['order_items'] = self.order_items.summary()
         output['payments'] = self.payments.summary()
         # these are payment fields that are part of the base order, not from
         # ZPAYMENTS.
@@ -366,15 +358,54 @@ class Order(TouchBistroDB):
         bindings = {
             'order_number': self.order_number}
         return self.db_handle.cursor().execute(
-            self.ORDER_QUERY, bindings).fetchone()
+            self.QUERY, bindings).fetchone()
 
-    def _fetch_order_items(self):
-        """Returns an iterable of database results for order items associated
-        with this order"""
+
+class OrderItemList(ItemList):
+    """Use this class to get a list of items for an order.
+    It behaves like a sequence, where you can simply iterate over the object,
+    or call it with an index to get a particular item.
+
+    kwargs:
+        - order_id
+    """
+
+    #: This query results in a list of order item ID numbers (foreign key into
+    #: the ZORDERITEM table)
+    QUERY = """SELECT
+            Z_52I_ORDERITEMS.Z_53I_ORDERITEMS AS ORDERITEM_ID
+        FROM Z_52I_ORDERITEMS
+        LEFT JOIN ZORDERITEM ON
+            ZORDERITEM.Z_PK = Z_52I_ORDERITEMS.Z_53I_ORDERITEMS
+        WHERE Z_52I_ORDERITEMS.Z_52I_ORDERS = :z_order_id
+        ORDER BY ZORDERITEM.ZI_INDEX ASC
+    """
+
+    def subtotal(self):
+        "Returns the total value of all order items after discounts/modifiers"
+        amount = 0.0
+        for orderitem in self.items:
+            amount += orderitem.subtotal()
+        return amount
+
+    @property
+    def items(self):
+        "Returns the orders as a list, caching db results"
+        if self._items is None:
+            self._items = list()
+            for row in self._fetch_items():
+                self._items.append(
+                    OrderItem(
+                        self._db_location,
+                        order_item_id=row['ORDERITEM_ID']))
+        return self._items
+
+    def _fetch_items(self):
+        """Returns a list of order items from the DB"""
         bindings = {
-            'z_order_id': self.order_id}
+            'z_order_id': self.kwargs.get('order_id')}
         return self.db_handle.cursor().execute(
-            self.LIST_ORDER_ITEM_QUERY, bindings).fetchall()
+            self.QUERY, bindings).fetchall()
 
 
 class OrderItem(TouchBistroDB):
