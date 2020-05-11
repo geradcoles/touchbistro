@@ -89,6 +89,9 @@ class SearchChangeLog(TouchBistroDBObject):
                 self.QUERY_BY_CHANGETYPE, bindings).fetchall():
             yield ChangeLogEntry.from_db_row(self._db_location, row)
 
+    def _fetch_from_db(self):
+        pass
+
 
 class ChangeLogEntry(TouchBistroDBObject):
     """This class represents a change log entry in the ZCHANGELOG table
@@ -113,6 +116,8 @@ class ChangeLogEntry(TouchBistroDBObject):
         WHERE ZUUID = :changelog_uuid
         """
 
+    QUERY_BINDING_ATTRIBUTES = ["changelog_uuid"]
+
     def __init__(self, db_location, **kwargs):
         super(ChangeLogEntry, self).__init__(db_location, **kwargs)
         self.changelog_uuid = kwargs.get('changelog_uuid')
@@ -121,65 +126,57 @@ class ChangeLogEntry(TouchBistroDBObject):
     def change_id(self):
         """Returns a Z_PK integer change id for the change, but changelog_uuid
         is best"""
-        return self.db_details['Z_PK']
+        return self._db_results['Z_PK']
 
     @property
     def timestamp(self):
         "Returns a datetime corresponding to the time of the change"
-        return cocoa_2_datetime(self.db_details['ZTIMESTAMP'])
+        return cocoa_2_datetime(self._db_results['ZTIMESTAMP'])
 
     @property
     def change_type(self):
         """Returns the type of change"""
-        return self.db_details['ZCHANGETYPE']
+        return self._db_results['ZCHANGETYPE']
 
     @property
     def change_type_details(self):
         """Returns details about the type of change"""
-        return self.db_details['ZCHANGETYPEDETAILS']
+        return self._db_results['ZCHANGETYPEDETAILS']
 
     @property
     def object_reference(self):
         """Returns a reference to the object being changed (uuid or PK etc)"""
-        return self.db_details['ZOBJECTREFERENCE']
+        return self._db_results['ZOBJECTREFERENCE']
 
     @property
     def object_reference_type(self):
         """Returns the type of object being changed"""
-        return self.db_details['ZOBJECTREFERENCETYPE']
+        return self._db_results['ZOBJECTREFERENCETYPE']
 
     @property
     def user_uuid(self):
         """Returns the uuid of the user that initiated the change"""
-        return self.db_details['ZUSER']
+        return self._db_results['ZUSER']
 
     @property
     def value_changed_from(self):
         """Returns the value of the object reference before the change, if
         applicable"""
-        return self.db_details['ZVALUECHANGEDFROM']
+        return self._db_results['ZVALUECHANGEDFROM']
 
     @property
     def value_changed_to(self):
         """Returns the value of the object reference after the change, if
         applicable"""
-        return self.db_details['ZVALUECHANGEDTO']
+        return self._db_results['ZVALUECHANGEDTO']
 
     @classmethod
     def from_db_row(cls, db_location, rowdata):
         """Populate and return a ChangeLogEntry object directly from a db
         result row"""
-        db_details = dict()
+        _db_results = dict()
         for key in rowdata.keys():
-            db_details[key] = rowdata[key]
+            _db_results[key] = rowdata[key]
         obj = cls(db_location,
-                  changelog_uuid=rowdata['ZUUID'], db_details=db_details)
+                  changelog_uuid=rowdata['ZUUID'], _db_results=[_db_results, ])
         return obj
-
-    def _fetch_entry(self):
-        """Returns the db row for this changelog entry"""
-        bindings = {
-            'changelog_uuid': self.changelog_uuid}
-        return self.db_handle.cursor().execute(
-            self.QUERY, bindings
-        ).fetchone()

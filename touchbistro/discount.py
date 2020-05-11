@@ -25,6 +25,8 @@ class ItemDiscountList(TouchBistroObjectList):
         ORDER BY ZI_INDEX ASC
         """
 
+    QUERY_BINDING_ATTRIBUTES = ['order_item_id']
+
     def total(self):
         "Returns the total value of all discounts in the list"
         amount = 0.0
@@ -37,21 +39,12 @@ class ItemDiscountList(TouchBistroObjectList):
         "Returns the discounts as a list, caching db results"
         if self._items is None:
             self._items = list()
-            for row in self._fetch_items():
+            for row in self.db_results:
                 self._items.append(
                     ItemDiscount(
                         self._db_location,
                         discount_uuid=row['ZUUID']))
         return self._items
-
-    def _fetch_items(self):
-        """Returns a list of discount uuids from the DB for this order
-        item"""
-        bindings = {
-            'order_item_id': self.kwargs.get('order_item_id')}
-        return self.db_handle.cursor().execute(
-            self.QUERY, bindings
-        ).fetchall()
 
 
 class ItemDiscount(TouchBistroDBObject):
@@ -77,6 +70,8 @@ class ItemDiscount(TouchBistroDBObject):
         WHERE ZUUID = :discount_uuid
         """
 
+    QUERY_BINDING_ATTRIBUTES = ['discount_uuid']
+
     def __init__(self, db_location, **kwargs):
         super(ItemDiscount, self).__init__(db_location, **kwargs)
         self.discount_uuid = kwargs.get('discount_uuid')
@@ -84,56 +79,56 @@ class ItemDiscount(TouchBistroDBObject):
     @property
     def discount_id(self):
         "Returns the Z_PK ID for this discount (ZUUID better for fetch)"
-        return self.db_details['Z_PK']
+        return self.db_results['Z_PK']
 
     @property
     def discount_type(self):
         "Map to the ZI_TYPE colum for the discount"
-        return DISCOUNT_TYPES[self.db_details['ZI_TYPE']]
+        return DISCOUNT_TYPES[self.db_results['ZI_TYPE']]
 
     @property
     def description(self):
         "Returns the human-readable description for the discount"
-        return self.db_details['ZDISCOUNTDESCRIPTION']
+        return self.db_results['ZDISCOUNTDESCRIPTION']
 
     @property
     def returns_inventory(self):
         "Returns True if this discount returns inventory"
-        if self.db_details['ZRETURNSINVENTORY']:
+        if self.db_results['ZRETURNSINVENTORY']:
             return True
         return False
 
     @property
     def taxable(self):
         "Returns True if this discount is taxable"
-        if self.db_details['ZTAXABLE']:
+        if self.db_results['ZTAXABLE']:
             return True
         return False
 
     @property
     def order_item_id(self):
         "Returns the ID number for the OrderItem discounted"
-        return self.db_details['ZORDERITEM']
+        return self.db_results['ZORDERITEM']
 
     @property
     def amount(self):
         "Returns the amount discounted for the OrderItem"
-        return self.db_details['ZI_AMOUNT']
+        return self.db_results['ZI_AMOUNT']
 
     @property
     def datetime(self):
         "Returns the Datetime associated with the discount"
-        return cocoa_2_datetime(self.db_details['ZVOIDDATE'])
+        return cocoa_2_datetime(self.db_results['ZVOIDDATE'])
 
     @property
     def waiter_uuid(self):
         "Returns the waiter UUID associated with the discount"
-        return self.db_details['ZWAITERUUID']
+        return self.db_results['ZWAITERUUID']
 
     @property
     def authorizer_uuid(self):
         "Returns the UUID for the Waiter who authorized the discount"
-        return self.db_details['ZMANAGERUUID']
+        return self.db_results['ZMANAGERUUID']
 
     def get_waiter(self):
         "Returns a Waiter object for the person who initiated the discount"
@@ -142,14 +137,6 @@ class ItemDiscount(TouchBistroDBObject):
     def get_authorizer(self):
         "Returns a Waiter object for the person that authorized the discount"
         return Waiter(self._db_location, waiter_uuid=self.authorizer_uuid)
-
-    def _fetch_entry(self):
-        """Returns the db row for this discount"""
-        bindings = {
-            'discount_uuid': self.discount_uuid}
-        return self.db_handle.cursor().execute(
-            self.QUERY, bindings
-        ).fetchone()
 
     def receipt_form(self):
         """Print the discount in a format suitable for receipts"""

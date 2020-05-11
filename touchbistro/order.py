@@ -88,6 +88,8 @@ class Order(TouchBistroDBObject):
         ORDER BY ZORDER.Z_PK DESC LIMIT 1 /* there can be more than 1 */
     """
 
+    QUERY_BINDING_ATTRIBUTES = ['order_number']
+
     def __init__(self, db_location, **kwargs):
         super(Order, self).__init__(db_location, **kwargs)
         self.order_number = kwargs.get('order_number')
@@ -98,31 +100,31 @@ class Order(TouchBistroDBObject):
     @property
     def order_uuid(self):
         "Return the UUID for this order"
-        return self.db_details['Z_ORDER_UUID']
+        return self.db_results['Z_ORDER_UUID']
 
     @property
     def order_id(self):
         "Returns the Z_PK ID for this order (not the customer-facing number)"
-        return self.db_details['Z_PK']
+        return self.db_results['Z_PK']
 
     @property
     def bill_number(self):
         "Return the bill number for this order"
         try:
-            return self.db_details['ZI_BILLNUMBER']
+            return self.db_results['ZI_BILLNUMBER']
         except KeyError:
             return None
 
     @property
     def party_as_split_order(self):
         "Return the value of ZPARTYASSPLITORDER for this order"
-        return self.db_details['ZPARTYASSPLITORDER']
+        return self.db_results['ZPARTYASSPLITORDER']
 
     @property
     def party_name(self):
         "Return the party name for this order"
         try:
-            return self.db_details['ZPARTYNAME']
+            return self.db_results['ZPARTYNAME']
         except KeyError:
             return None
 
@@ -130,7 +132,7 @@ class Order(TouchBistroDBObject):
     def table_name(self):
         "Returns the table name for the order"
         try:
-            return self.db_details['ZTABLENAME']
+            return self.db_results['ZTABLENAME']
         except KeyError:
             return None
 
@@ -139,7 +141,7 @@ class Order(TouchBistroDBObject):
         """Returns a Python Datetime object with local timezone corresponding
         to the time that the order was paid"""
         try:
-            return cocoa_2_datetime(self.db_details['ZPAYDATE'])
+            return cocoa_2_datetime(self.db_results['ZPAYDATE'])
         except TypeError:
             return None
 
@@ -147,7 +149,7 @@ class Order(TouchBistroDBObject):
     def order_type(self):
         "Returns the order type, aka 'takeout', 'dine-in', 'delivery', etc"
         try:
-            return self.db_details['TAKEOUT_TYPE']
+            return self.db_results['TAKEOUT_TYPE']
         except KeyError:
             return None
 
@@ -155,67 +157,67 @@ class Order(TouchBistroDBObject):
     def custom_takeout_type(self):
         "Returns the custom takeout type associated with a takeout order"
         try:
-            return self.db_details['CUSTOMTAKEOUTTYPE']
+            return self.db_results['CUSTOMTAKEOUTTYPE']
         except KeyError:
             return None
 
     @property
     def payment_group_id(self):
         "Returns the ID for the payment group associated with this order"
-        return self.db_details['ZPAYMENTS']
+        return self.db_results['ZPAYMENTS']
 
     @property
     def outstanding_balance(self):
         """Returns the outstanding balance amount for the order"""
-        return self.db_details['ZOUTSTANDINGBALANCE']
+        return self.db_results['ZOUTSTANDINGBALANCE']
 
     @property
     def loyalty_account_name(self):
         """Returns the name associated with a Loyalty account used to pay the
         order (if that was the case)"""
-        return self.db_details['ZLOYALTYACCOUNTNAME']
+        return self.db_results['ZLOYALTYACCOUNTNAME']
 
     @property
     def loyalty_credit_balance(self):
         """Returns the credit balance of the Loyalty account used to pay the
         order (if that was the case)"""
-        return self.db_details['ZLOYALTYCREDITBALANCE']
+        return self.db_results['ZLOYALTYCREDITBALANCE']
 
     @property
     def loyalty_point_balance(self):
         """Returns the point balance of the Loyalty account used to pay the
         order (if that was the case)"""
-        return self.db_details['ZLOYALTYPOINTSBALANCE']
+        return self.db_results['ZLOYALTYPOINTSBALANCE']
 
     @property
     def waiter_name(self):
         "Returns the display name of the waiter that closed the bill"
         try:
-            return self.db_details['WAITERNAME']
+            return self.db_results['WAITERNAME']
         except KeyError:
             return None
 
     @property
     def stack_tax_2_on_tax_1(self):
         """Return True if tax 2 should be stacked on tax 1 (tax on tax)"""
-        if self.db_details['ZI_TAX2ONTAX1']:
+        if self.db_results['ZI_TAX2ONTAX1']:
             return True
         return False
 
     @property
     def tax_rate_1(self):
         """Returns tax rate 1 (ZI_TAX1) column, as a decimal float"""
-        return self.db_details['ZI_TAX1']
+        return self.db_results['ZI_TAX1']
 
     @property
     def tax_rate_2(self):
         """Returns tax rate 2 (ZI_TAX2) column, as a decimal float"""
-        return self.db_details['ZI_TAX2']
+        return self.db_results['ZI_TAX2']
 
     @property
     def tax_rate_3(self):
         """Returns tax rate 3 (ZI_TAX3) column, as a decimal float"""
-        return self.db_details['ZI_TAX3']
+        return self.db_results['ZI_TAX3']
 
     @property
     def order_items(self):
@@ -342,13 +344,6 @@ class Order(TouchBistroDBObject):
             output['meta']['loyalty_info'][field] = getattr(self, field)
         return output
 
-    def _fetch_entry(self):
-        """Returns a summary list of dicts as per the class summary"""
-        bindings = {
-            'order_number': self.order_number}
-        return self.db_handle.cursor().execute(
-            self.QUERY, bindings).fetchone()
-
 
 class OrderItemList(TouchBistroObjectList):
     """Use this class to get a list of items for an order.
@@ -366,9 +361,11 @@ class OrderItemList(TouchBistroObjectList):
         FROM Z_52I_ORDERITEMS
         LEFT JOIN ZORDERITEM ON
             ZORDERITEM.Z_PK = Z_52I_ORDERITEMS.Z_53I_ORDERITEMS
-        WHERE Z_52I_ORDERITEMS.Z_52I_ORDERS = :z_order_id
+        WHERE Z_52I_ORDERITEMS.Z_52I_ORDERS = :order_id
         ORDER BY ZORDERITEM.ZI_INDEX ASC
     """
+
+    QUERY_BINDING_ATTRIBUTES = ['order_id']
 
     def subtotal(self):
         "Returns the total value of all order items after discounts/modifiers"
@@ -377,24 +374,10 @@ class OrderItemList(TouchBistroObjectList):
             amount += orderitem.subtotal()
         return amount
 
-    @property
-    def items(self):
-        "Returns the orders as a list, caching db results"
-        if self._items is None:
-            self._items = list()
-            for row in self._fetch_items():
-                self._items.append(
-                    OrderItem(
-                        self._db_location,
-                        order_item_id=row['ORDERITEM_ID']))
-        return self._items
-
-    def _fetch_items(self):
-        """Returns a list of order items from the DB"""
-        bindings = {
-            'z_order_id': self.kwargs.get('order_id')}
-        return self.db_handle.cursor().execute(
-            self.QUERY, bindings).fetchall()
+    def _vivify_db_row(self, row):
+        "Convert a DB row into an OrderItem"
+        return OrderItem(
+            self._db_location, order_item_id=row['ORDERITEM_ID'])
 
 
 class OrderItem(TouchBistroDBObject):
@@ -423,6 +406,8 @@ class OrderItem(TouchBistroDBObject):
         WHERE ZORDERITEM.Z_PK = :order_item_id
     """
 
+    QUERY_BINDING_ATTRIBUTES = ['order_item_id']
+
     def __init__(self, db_location, **kwargs):
         super(OrderItem, self).__init__(db_location, **kwargs)
         self.order_item_id = kwargs.get('order_item_id')
@@ -433,29 +418,29 @@ class OrderItem(TouchBistroDBObject):
     @property
     def quantity(self):
         "Return the quantity associated with the order line item"
-        return self.db_details['ZI_QUANTITY']
+        return self.db_results['ZI_QUANTITY']
 
     @property
     def open_price(self):
         "Return the open price for the menu item (if applicable)"
-        return self.db_details['ZI_OPENPRICE']
+        return self.db_results['ZI_OPENPRICE']
 
     @property
     def waiter_name(self):
         "Return the customer-facing waiter name associated with the order item"
-        return self.db_details['WAITERNAME']
+        return self.db_results['WAITERNAME']
 
     @property
     def course_number(self):
         """Return the course number for the menu item."""
-        return self.db_details['ITEM_COURSE']
+        return self.db_results['ITEM_COURSE']
 
     @property
     def sent_time(self):
         """Returns a Python Datetime object with local timezone corresponding
         to the time that the item was sent to the kitchen/bar (or None)"""
         if self.was_sent:
-            return cocoa_2_datetime(self.db_details['ZSENTTIME'])
+            return cocoa_2_datetime(self.db_results['ZSENTTIME'])
         return None
 
     @property
@@ -464,7 +449,7 @@ class OrderItem(TouchBistroDBObject):
         if self._menu_item is None:
             self._menu_item = MenuItem(
                 self._db_location,
-                menuitem_uuid=self.db_details['ZMENUITEMUUID'])
+                menuitem_uuid=self.db_results['ZMENUITEMUUID'])
         return self._menu_item
 
     def summary(self):
@@ -507,7 +492,7 @@ class OrderItem(TouchBistroDBObject):
     @property
     def was_sent(self):
         "Returns True if the menu item was sent to the kitchen/bar"
-        if self.db_details['ZI_SENT']:
+        if self.db_results['ZI_SENT']:
             return True
         return False
 
@@ -550,11 +535,3 @@ class OrderItem(TouchBistroDBObject):
                 order_item_id=self.order_item_id
             )
         return self._modifiers
-
-    def _fetch_entry(self):
-        """Returns a summary list of dicts as per the class summary"""
-        bindings = {
-            'order_item_id': self.order_item_id}
-        return self.db_handle.cursor().execute(
-            self.QUERY, bindings
-        ).fetchone()

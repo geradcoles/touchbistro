@@ -1,11 +1,10 @@
 """This module provides the base classes required for various other
 modules representing TouchBistro objects.
 """
-import logging
-import sqlite3
+from .tbdatabase import TouchBistroDBQueryResult
 
 
-class TouchBistroDBObject():
+class TouchBistroDBObject(TouchBistroDBQueryResult):
     """
     This class provides a base object for database operations in
     TouchBistro.
@@ -13,38 +12,13 @@ class TouchBistroDBObject():
 
     META_ATTRIBUTES = []
 
-    QUERY = None
-
-    def __init__(self, db_location, **kwargs):
-        self.log = logging.getLogger("{}.{}".format(
-            self.__class__.__module__, self.__class__.__name__
-        ))
-        self.dry_run = kwargs.get('dry_run', False)
-        self._db_location = db_location
-        self.kwargs = kwargs
-        self._db_details = kwargs.get('db_details', None)
-        self.__db_handle = None
-        self.__cursor = None
-
     @property
-    def db_handle(self):
-        "Returns an sqlite3 database handle"
-        if self.__db_handle is None:
-            self.log.debug('getting an sqlite3 database handle')
-            self.__db_handle = sqlite3.connect(self._db_location)
-            self.__db_handle.row_factory = sqlite3.Row
-        return self.__db_handle
-
-    @property
-    def db_details(self):
-        "Returns cached results for the :attr:`QUERY` specified above"
-        if self._db_details is None:
-            self._db_details = dict()
-            result = self._fetch_entry()
-            for key in result.keys():
-                # perform the dict copy
-                self._db_details[key] = result[key]
-        return self._db_details
+    def db_results(self):
+        """Return the first db result since there should always be one"""
+        try:
+            return super(TouchBistroDBObject, self).db_results[0]
+        except IndexError:
+            return None
 
     def summary(self):
         """Returns a dictionary version of the change"""
@@ -52,10 +26,6 @@ class TouchBistroDBObject():
         for attr in self.META_ATTRIBUTES:
             output['meta'][attr] = getattr(self, attr)
         return output
-
-    def _fetch_entry(self):
-        """Returns the db row for this object"""
-        return dict()
 
     def __str__(self):
         "Return a string-formatted version of this object"
@@ -67,7 +37,7 @@ class TouchBistroDBObject():
         return output
 
 
-class TouchBistroObjectList(TouchBistroDBObject):
+class TouchBistroObjectList(TouchBistroDBQueryResult):
     """This class represents a list of objects and provides a sequence-type
     interface. You can iterate over this List, use index syntax obj_list[2],
     and get a length for the item list as with a normal list.
@@ -80,8 +50,12 @@ class TouchBistroObjectList(TouchBistroDBObject):
 
     @property
     def items(self):
-        "Returns items as a list, caching db results"
-        raise NotImplementedError("Item not implemented in subclass")
+        "Returns a list of vivified objects"
+        if self._items is None:
+            self._items = list()
+            for row in self.db_results:
+                self._items.append(self._vivify_db_row(row))
+        return self._items
 
     def summary(self):
         "Return a summary of the item list"
@@ -89,6 +63,11 @@ class TouchBistroObjectList(TouchBistroDBObject):
         for item in self.items:
             output.append(item.summary())
         return output
+
+    def _vivify_db_row(self, row):
+        """Implement in a subclass to provide mechanism to convert a db row
+        into the object type returned by items() above."""
+        raise NotImplementedError("_vivify_db_row has not been implemented")
 
     def __len__(self):
         "Return the number of db results"
@@ -102,7 +81,3 @@ class TouchBistroObjectList(TouchBistroDBObject):
     def __getitem__(self, key):
         "Return the item at index key"
         return self.items[key]
-
-    def _fetch_items(self):
-        """Returns a list of item ids from the DB"""
-        raise NotImplementedError("_fetch_items not implemented in subclass")

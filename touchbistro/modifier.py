@@ -19,6 +19,8 @@ class ItemModifierList(TouchBistroObjectList):
         ORDER BY ZI_INDEX ASC
         """
 
+    QUERY_BINDING_ATTRIBUTES = ['order_item_id']
+
     def total(self):
         "Returns the total value of modifiers in the list"
         amount = 0.0
@@ -26,26 +28,10 @@ class ItemModifierList(TouchBistroObjectList):
             amount += modifier.price
         return amount
 
-    @property
-    def items(self):
-        "Returns the discounts as a list, caching db results"
-        if self._items is None:
-            self._items = list()
-            for row in self._fetch_items():
-                self._items.append(
-                    ItemModifier(
-                        self._db_location,
-                        modifier_uuid=row['ZUUID']))
-        return self._items
-
-    def _fetch_items(self):
-        """Returns a list of modifier uuids from the DB for this order
-        item"""
-        bindings = {
-            'order_item_id': self.kwargs.get('order_item_id')}
-        return self.db_handle.cursor().execute(
-            self.QUERY, bindings
-        ).fetchall()
+    def _vivify_db_row(self, row):
+        "Convert a db row to an ItemModifier"
+        return ItemModifier(
+            self._db_location, modifier_uuid=row['ZUUID'])
 
 
 class ItemModifier(TouchBistroDBObject):
@@ -94,6 +80,8 @@ class ItemModifier(TouchBistroDBObject):
         WHERE ZMODIFIER.ZUUID = :modifier_uuid
         """
 
+    QUERY_BINDING_ATTRIBUTES = ['modifier_uuid']
+
     def __init__(self, db_location, **kwargs):
         super(ItemModifier, self).__init__(db_location, **kwargs)
         self.modifier_uuid = kwargs.get('modifier_uuid')
@@ -101,29 +89,29 @@ class ItemModifier(TouchBistroDBObject):
     @property
     def modifier_id(self):
         "Returns the Z_PK version of the modifier ID (UUID is better)"
-        return self.db_details['Z_PK']
+        return self.db_results['Z_PK']
 
     @property
     def is_required(self):
         "Returns True if this was a required modifier"
-        if self.db_details['ZREQUIREDMODIFIER']:
+        if self.db_results['ZREQUIREDMODIFIER']:
             return True
         return False
 
     @property
     def container_order_item_id(self):
         "Returns the ID of the OrderItem that this modifier is associated with"
-        return self.db_details['ZCONTAINERORDERITEM']
+        return self.db_results['ZCONTAINERORDERITEM']
 
     @property
     def menu_item_id(self):
         "Returns the simple Z_PK version of the menu item ID for this modifier"
-        return self.db_details['ZMENUITEM']
+        return self.db_results['ZMENUITEM']
 
     @property
     def modifier_group_id(self):
         "Returns the ID of the modifier group this modifier was a part of"
-        return self.db_details['ZMODIFIERGROUP']
+        return self.db_results['ZMODIFIERGROUP']
 
     @property
     def modifier_group_for_menu_item(self):
@@ -131,39 +119,31 @@ class ItemModifier(TouchBistroDBObject):
         from :attr:`menu_item_id` above, in situations where the modifier came
         about as a result of a nested choice of a menu item with its own
         modifiers"""
-        return self.db_details['ZMODIFIERGROUPFORMENUITEM']
+        return self.db_results['ZMODIFIERGROUPFORMENUITEM']
 
     @property
     def order_item(self):
         """If a menu item was chosen as a modifer, returns the corresponding
         order item ID for that item"""
-        return self.db_details['ZORDERITEM']
+        return self.db_results['ZORDERITEM']
 
     @property
     def creation_date(self):
         """Returns a datetime object (in local timezone) corresponding to the
         time that the modifier was created. Does not appear to be used."""
-        return self.db_details['ZCREATEDATE']
+        return self.db_results['ZCREATEDATE']
 
     @property
     def price(self):
         "Return the price associated with the modifier"
-        return self.db_details['ZI_PRICE']
+        return self.db_results['ZI_PRICE']
 
     @property
     def name(self):
         "Returns the name associated with the modifier (incl custom text)"
         if self.menu_item_id:
-            return self.db_details['MENU_ITEM_NAME']
-        return self.db_details['ZI_NAME']
-
-    def _fetch_entry(self):
-        """Returns the db row for this modifier"""
-        bindings = {
-            'modifier_uuid': self.modifier_uuid}
-        return self.db_handle.cursor().execute(
-            self.QUERY, bindings
-        ).fetchone()
+            return self.db_results['MENU_ITEM_NAME']
+        return self.db_results['ZI_NAME']
 
     def receipt_form(self):
         """Output the modifier in a form suitable for receipts and chits"""

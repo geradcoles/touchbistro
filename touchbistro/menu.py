@@ -68,6 +68,8 @@ class MenuItem(TouchBistroDBObject):
         WHERE ZUUID = :menuitem_uuid
         """
 
+    QUERY_BINDING_ATTRIBUTES = ['menuitem_uuid']
+
     def __init__(self, db_location, **kwargs):
         super(MenuItem, self).__init__(db_location, **kwargs)
         self.menuitem_uuid = kwargs.get('menuitem_uuid')
@@ -77,72 +79,72 @@ class MenuItem(TouchBistroDBObject):
     @property
     def menu_id(self):
         "Returns the Z_PK primary key for the menu item"
-        return self.db_details['Z_PK']
+        return self.db_results['Z_PK']
 
     @property
     def course(self):
         "Returns the integer course number for the menu item (if set)"
-        return self.db_details['ZI_COURSE']
+        return self.db_results['ZI_COURSE']
 
     @property
     def exclude_tax1(self):
         "Returns True if the menu item is excluded from Tax 1"
-        return self.db_details['ZI_EXCLUDETAX1']
+        return self.db_results['ZI_EXCLUDETAX1']
 
     @property
     def exclude_tax2(self):
         "Returns True if the menu item is excluded from Tax 2"
-        return self.db_details['ZI_EXCLUDETAX2']
+        return self.db_results['ZI_EXCLUDETAX2']
 
     @property
     def exclude_tax3(self):
         "Returns True if the menu item is excluded from Tax 3"
-        return self.db_details['ZI_EXCLUDETAX3']
+        return self.db_results['ZI_EXCLUDETAX3']
 
     @property
     def hidden(self):
         "Returns True if the menu item should be hidden"
-        return self.db_details['ZI_HIDDEN']
+        return self.db_results['ZI_HIDDEN']
 
     @property
     def index(self):
         "Returns the index number for the menu item (in a menu category)"
-        return self.db_details['ZI_INDEX']
+        return self.db_results['ZI_INDEX']
 
     @property
     def in_stock(self):
         "Returns True if the menu item is in stock"
-        return self.db_details['ZINSTOCK']
+        return self.db_results['ZINSTOCK']
 
     @property
     def is_archived(self):
         "Returns True if the menu item is archived (deleted)"
-        return self.db_details['ZISARCHIVED']
+        return self.db_results['ZISARCHIVED']
 
     @property
     def is_returnable(self):
         "Returns True if the menu item is returnable"
-        return self.db_details['ZISRETURNABLE']
+        return self.db_results['ZISRETURNABLE']
 
     @property
     def print_seperate_chit(self):
         "Returns True if the menu item should be printed on its own chit"
-        return self.db_details['ZPRINTSEPERATECHIT']
+        return self.db_results['ZPRINTSEPERATECHIT']
 
     @property
     def require_manager(self):
         "Returns True if the menu item requires a manager to order"
-        return self.db_details['ZREQUIREMANAGER']
+        return self.db_results['ZREQUIREMANAGER']
 
     @property
     def show_in_public_menu(self):
         "Returns True if the menu item should be shown in the public menu"
-        return self.db_details['ZSHOWINPUBLICMENU']
+        return self.db_results['ZSHOWINPUBLICMENU']
 
     @property
     def sales_category_type_id(self):
         "Returns the sales category type as an integer ID"
-        return self.db_details['ZTYPE']
+        return self.db_results['ZTYPE']
 
     @property
     def sales_category(self):
@@ -156,22 +158,22 @@ class MenuItem(TouchBistroDBObject):
     @property
     def use_recipe_cost(self):
         "Returns True if the menu item should be costed based on a recipe"
-        return self.db_details['ZUSERECIPECOST']
+        return self.db_results['ZUSERECIPECOST']
 
     @property
     def used_for_gift_cards(self):
         "Returns True if the menu item is used to purchase gift cards"
-        return self.db_details['ZUSEDFORGIFTCARDS']
+        return self.db_results['ZUSEDFORGIFTCARDS']
 
     @property
     def menu_category_id(self):
         "Returns the menu category id associated with this menu item"
-        return self.db_details['ZCATEGORY']
+        return self.db_results['ZCATEGORY']
 
     @property
     def menu_category_uuid(self):
         "Returns the menu category uuid associated with this menu item"
-        return self.db_details['ZCATEGORYUUID']
+        return self.db_results['ZCATEGORYUUID']
 
     @property
     def menu_category(self):
@@ -186,91 +188,91 @@ class MenuItem(TouchBistroDBObject):
     @property
     def actual_cost(self):
         "Returns a floating-point cost for the menu item"
-        return self.db_details['ZACTUALCOST']
+        return self.db_results['ZACTUALCOST']
 
     @property
     def approx_cooking_time(self):
         "Returns an approximate cooking time as a floating point number"
-        return self.db_details['ZAPPROXCOOKINGTIME']
+        return self.db_results['ZAPPROXCOOKINGTIME']
 
     @property
     def created_date(self):
         "Returns a tz-aware datetime object for when the menu item was created"
         try:
-            return cocoa_2_datetime(self.db_details['ZCREATEDATE'])
+            return cocoa_2_datetime(self.db_results['ZCREATEDATE'])
         except TypeError:
             return None
 
     @property
     def count(self):
         "Returns a count of the menu item (inventory), as a floating point #"
-        return self.db_details['ZI_COUNT']
+        return self.db_results['ZI_COUNT']
 
     @property
     def warn_count(self):
         "Returns a count below which a low-stock warning should be issued"
-        return self.db_details['ZI_WARNCOUNT']
+        return self.db_results['ZI_WARNCOUNT']
 
     @property
     def price(self):
         "Returns a price for the menu item, as a floating point number"
-        return self.db_details['ZI_PRICE']
+        return self.db_results['ZI_PRICE']
 
     @property
     def version(self):
         """Returns a tz-aware datetime object representing a version for the
         item"""
-        return cocoa_2_datetime(self.db_details['ZVERSION'])
+        return cocoa_2_datetime(self.db_results['ZVERSION'])
 
     @property
     def full_image(self):
         "Returns a name for the full-sized image associated with the item"
-        return self.db_details['ZI_FULLIMAGE']
+        return self.db_results['ZI_FULLIMAGE']
 
     @property
     def thumb_image(self):
         "Returns a name for the thumbnail image associated with the item"
-        return self.db_details['ZI_THUMBIMAGE']
+        return self.db_results['ZI_THUMBIMAGE']
 
     @property
     def description(self):
         "Returns a text description of the menu item"
-        return self.db_details['ZITEMDESCRIPTION']
+        return self.db_results['ZITEMDESCRIPTION']
 
     @property
     def parent_uuid(self):
         "Returns a UUID for a parent menu item (for edited/versioned items)"
-        return self.db_details['ZI_PARENTUUID']
+        return self.db_results['ZI_PARENTUUID']
 
     @property
     def name(self):
         "Returns the name of the menu item"
-        return self.db_details['ZNAME']
+        return self.db_results['ZNAME']
 
     @property
     def public_menu_cloud_image_full_url(self):
         "Returns a url to the public cloud menu full-sized image"
-        return self.db_details['ZPUBLICMENUCLOUDIMAGEFULLURL']
+        return self.db_results['ZPUBLICMENUCLOUDIMAGEFULLURL']
 
     @property
     def public_menu_cloud_image_thumb_url(self):
         "Returns a url to the public cloud menu thumbnail image"
-        return self.db_details['ZPUBLICMENUCLOUDIMAGETHUMBNAILURL']
+        return self.db_results['ZPUBLICMENUCLOUDIMAGETHUMBNAILURL']
 
     @property
     def recipe(self):
         "Returns the recipe id (uuid?) associated with the menu item"
-        return self.db_details['ZRECIPE']
+        return self.db_results['ZRECIPE']
 
     @property
     def short_name(self):
         "Returns the short (chit) name of the menu item, if set"
-        return self.db_details['ZSHORTNAME']
+        return self.db_results['ZSHORTNAME']
 
     @property
     def upc(self):
         "Returns the upc code for the menu item"
-        return self.db_details['ZUPC']
+        return self.db_results['ZUPC']
 
     def summary(self):
         """Returns a dictionary version of the change"""
@@ -278,14 +280,6 @@ class MenuItem(TouchBistroDBObject):
         output['menu_category'] = self.menu_category.summary()
         output['sales_category'] = self.sales_category.summary()
         return output
-
-    def _fetch_entry(self):
-        """Returns the db row for this menuitem entry"""
-        bindings = {
-            'menuitem_uuid': self.menuitem_uuid}
-        return self.db_handle.cursor().execute(
-            self.QUERY, bindings
-        ).fetchone()
 
 
 class MenuCategory(TouchBistroDBObject):
@@ -306,82 +300,73 @@ class MenuCategory(TouchBistroDBObject):
                        'printer_id', 'station_id', 'created_date', 'image']
 
     #: Query to get details about this object by UUID
-    QUERY_BY_UUID = """SELECT
+    QUERY = """SELECT
             *
         FROM ZMENUCATEGORY
-        WHERE ZUUID = :value
+        WHERE ZUUID = :category_uuid
         """
 
-    #: Query to get details about this object by integer key
-    QUERY_BY_ID = """SELECT
-            *
-        FROM ZMENUCATEGORY
-        WHERE Z_PK = :value
-        """
+    QUERY_BINDING_ATTRIBUTES = ['category_uuid']
 
     def __init__(self, db_location, **kwargs):
         super(MenuCategory, self).__init__(db_location, **kwargs)
+        self.category_uuid = kwargs.get('category_uuid', None)
         self._sales_category = None
-
-    @property
-    def category_uuid(self):
-        "Returns the UUID for this category"
-        return self.db_details['ZUUID']
 
     @property
     def category_id(self):
         "Returns the Z_PK primary key for the menu category"
-        return self.db_details['Z_PK']
+        return self.db_results['Z_PK']
 
     @property
     def course(self):
         "Returns the integer course number for the menu category"
-        return self.db_details['ZI_COURSE']
+        return self.db_results['ZI_COURSE']
 
     @property
     def custom(self):
         "Returns True if this is a custom menu category"
-        return self.db_details['ZI_CUSTOM']
+        return self.db_results['ZI_CUSTOM']
 
     @property
     def index(self):
         "Returns the index number for the menu category (in a menu)"
-        return self.db_details['ZI_INDEX']
+        return self.db_results['ZI_INDEX']
 
     @property
     def sorting(self):
         "Returns an integer representing sorting (True/False?)"
-        return self.db_details['ZI_SORTING']
+        return self.db_results['ZI_SORTING']
 
     @property
     def tax1(self):
         "Returns True if the menu category is subject to Tax 1"
-        return self.db_details['ZI_TAX1']
+        return self.db_results['ZI_TAX1']
 
     @property
     def tax2(self):
         "Returns True if the menu category is subject to Tax 2"
-        return self.db_details['ZI_TAX2']
+        return self.db_results['ZI_TAX2']
 
     @property
     def tax3(self):
         "Returns True if the menu category is subject to Tax 3"
-        return self.db_details['ZI_TAX3']
+        return self.db_results['ZI_TAX3']
 
     @property
     def hidden(self):
         "Returns True if the menu item should be hidden"
-        return self.db_details['ZISHIDDEN']
+        return self.db_results['ZISHIDDEN']
 
     @property
     def show_in_public_menu(self):
         "Returns True if the menu item should be shown in the public menu"
-        return self.db_details['ZSHOWINPUBLICMENU']
+        return self.db_results['ZSHOWINPUBLICMENU']
 
     @property
     def sales_category_type_id(self):
         "Returns the sales category as an integer ID"
-        return self.db_details['ZTYPE']
+        return self.db_results['ZTYPE']
 
     @property
     def sales_category(self):
@@ -396,53 +381,69 @@ class MenuCategory(TouchBistroDBObject):
     def hidden_schedule_id(self):
         """Returns an integer id for a hidden schedule associated with the
         category"""
-        return self.db_details['ZHIDDENSCHEDULE']
+        return self.db_results['ZHIDDENSCHEDULE']
 
     @property
     def kitchen_display_id(self):
         """Returns an integer id for a kitchen display associated with the
         category"""
-        return self.db_details['ZKITCHENDISPLAY']
+        return self.db_results['ZKITCHENDISPLAY']
 
     @property
     def printer_id(self):
         """Returns an integer id for kitchen printer associated with the
         category"""
-        return self.db_details['ZPRINTER']
+        return self.db_results['ZPRINTER']
 
     @property
     def station_id(self):
         """Returns an integer id for the station associated with the
         category"""
-        return self.db_details['ZSTATION']
+        return self.db_results['ZSTATION']
 
     @property
     def created_date(self):
         "Returns a tz-aware datetime object for when the menu item was created"
         try:
-            return cocoa_2_datetime(self.db_details['ZCREATEDATE'])
+            return cocoa_2_datetime(self.db_results['ZCREATEDATE'])
         except TypeError:
             return None
 
     @property
     def image(self):
         "Returns a name for the full-sized image associated with the category"
-        return self.db_details['ZI_IMAGE']
+        return self.db_results['ZI_IMAGE']
 
     @property
     def name(self):
         "Returns the name of the menu item"
-        return self.db_details['ZNAME']
+        return self.db_results['ZNAME']
 
-    def _fetch_entry(self):
-        """Returns the db row for this menuitem entry"""
-        bindings = dict()
-        if self.kwargs.get('category_uuid', None):
-            bindings['value'] = self.kwargs.get('category_uuid')
-            return self.db_handle.cursor().execute(
-                self.QUERY_BY_UUID, bindings).fetchone()
-        if self.kwargs.get('category_id', None):
-            bindings['value'] = self.kwargs.get('category_id')
-            return self.db_handle.cursor().execute(
-                self.QUERY_BY_ID, bindings).fetchone()
-        return None
+
+class MenuCategoryByID(MenuItem):
+    """Use this class to get a menu category starting from its Z_PK primary key
+    rather than UUID.
+
+    kwargs:
+
+        - category_id: the Z_PK category id for the Menu Category
+    """
+
+    #: Query to get details about this object by integer key
+    QUERY = """SELECT
+            *
+        FROM ZMENUCATEGORY
+        WHERE Z_PK = :category_id
+        """
+
+    QUERY_BINDING_ATTRIBUTES = ['category_id']
+
+    def __init__(self, db_location, **kwargs):
+        super(MenuCategoryByID, self).__init__(db_location, **kwargs)
+        self.category_id = kwargs.get('category_id')
+        self._sales_category = None
+
+    @property
+    def category_uuid(self):
+        "Returns the Z_PK primary key for the menu category"
+        return self.db_results['ZUUID']

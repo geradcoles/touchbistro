@@ -33,6 +33,8 @@ class PaymentGroup(TouchBistroObjectList):
         ORDER BY ZI_INDEX ASC
         """
 
+    QUERY_BINDING_ATTRIBUTES = ['payment_group_id']
+
     def total_amount(self):
         "Returns the total value of payments in the list"
         amount = 0.0
@@ -40,24 +42,10 @@ class PaymentGroup(TouchBistroObjectList):
             amount += payment.amount
         return amount
 
-    @property
-    def items(self):
-        "Returns the discounts as a list, caching db results"
-        if self._items is None:
-            self._items = list()
-            for row in self._fetch_items():
-                self._items.append(
-                    Payment(
-                        self._db_location,
-                        payment_uuid=row['ZUUID']))
-        return self._items
-
-    def _fetch_items(self):
-        """Returns a list of payments from the DB for this payment group"""
-        bindings = {
-            'payment_group_id': self.kwargs.get('payment_group_id')}
-        return self.db_handle.cursor().execute(
-            self.QUERY, bindings).fetchall()
+    def _vivify_db_row(self, row):
+        return Payment(
+            self._db_location,
+            payment_uuid=row['ZUUID'])
 
 
 class Payment(TouchBistroDBObject):
@@ -95,6 +83,8 @@ class Payment(TouchBistroDBObject):
         WHERE ZUUID = :payment_uuid
         """
 
+    QUERY_BINDING_ATTRIBUTES = ['payment_uuid']
+
     def __init__(self, db_location, **kwargs):
         super(Payment, self).__init__(db_location, **kwargs)
         self.payment_uuid = kwargs.get('payment_uuid')
@@ -103,13 +93,13 @@ class Payment(TouchBistroDBObject):
     def payment_number(self):
         """Returns the payment number associated with this payment, by adding
         1 to ZI_INDEX to make it human readable"""
-        return self.db_details['ZI_INDEX'] + 1
+        return self.db_results['ZI_INDEX'] + 1
 
     @property
     def amount(self):
         """Returns the payment amount for paid orders"""
         try:
-            return round(self.db_details['ZI_AMOUNT'], 2)
+            return round(self.db_results['ZI_AMOUNT'], 2)
         except TypeError:
             return 0.0
 
@@ -117,7 +107,7 @@ class Payment(TouchBistroDBObject):
     def tip(self):
         """Returns the tip amount for paid orders"""
         try:
-            return round(self.db_details['ZTIP'], 2)
+            return round(self.db_results['ZTIP'], 2)
         except TypeError:
             return 0.0
 
@@ -125,7 +115,7 @@ class Payment(TouchBistroDBObject):
     def change(self):
         """Returns the amount of change provided"""
         try:
-            return round(self.db_details['ZI_CHANGE'], 2)
+            return round(self.db_results['ZI_CHANGE'], 2)
         except TypeError:
             return 0.0
 
@@ -133,7 +123,7 @@ class Payment(TouchBistroDBObject):
     def refundable_amount(self):
         """Returns the refundable amount of the order"""
         try:
-            return round(self.db_details['ZI_REFUNDABLEAMOUNT'], 2)
+            return round(self.db_results['ZI_REFUNDABLEAMOUNT'], 2)
         except TypeError:
             return 0.0
 
@@ -141,7 +131,7 @@ class Payment(TouchBistroDBObject):
     def original_payment_uuid(self):
         """If this was a refund payment, return the UUID of the original
         payment that was refunded (in a fully-integrated refund scenario)."""
-        return self.db_details['ZORIGINALPAYMENTUUID']
+        return self.db_results['ZORIGINALPAYMENTUUID']
 
     def is_refund(self):
         "Return true if this is a refund payment"
@@ -151,14 +141,14 @@ class Payment(TouchBistroDBObject):
     def balance(self):
         """Returns the remaining balance after the payment was made"""
         try:
-            return round(self.db_details['ZBALANCE'], 2)
+            return round(self.db_results['ZBALANCE'], 2)
         except TypeError:
             return 0.0
 
     @property
     def payment_type_id(self):
         """Returns a payment type ID for the order (based on ZI_TYPE column)"""
-        return self.db_details['ZI_TYPE']
+        return self.db_results['ZI_TYPE']
 
     @property
     def payment_type(self):
@@ -169,30 +159,30 @@ class Payment(TouchBistroDBObject):
     def customer_account_id(self):
         """Return an ID number for a customer account associated with the
         payment, if there was one (ZACCOUNT column)"""
-        return self.db_details['ZACCOUNT']
+        return self.db_results['ZACCOUNT']
 
     @property
     def customer_id(self):
         """Returns the ID of a Customer associated with the payment, if
         present (ZCUSTOMER column)"""
-        return self.db_details['ZCUSTOMER']
+        return self.db_results['ZCUSTOMER']
 
     @property
     def card_type(self):
         """When payment cards are used, return the card type"""
-        return self.db_details['ZCARDTYPE']
+        return self.db_results['ZCARDTYPE']
 
     @property
     def auth_number(self):
         """When payment cards are used, return the card authorization #"""
-        return self.db_details['ZAUTH']
+        return self.db_results['ZAUTH']
 
     @property
     def create_date(self):
         """Returns a Python Datetime object with local timezone corresponding
         to the time that the payment occurred"""
         try:
-            return cocoa_2_datetime(self.db_details['ZCREATEDATE'])
+            return cocoa_2_datetime(self.db_results['ZCREATEDATE'])
         except TypeError:
             return None
 
@@ -217,11 +207,3 @@ class Payment(TouchBistroDBObject):
                 f"{cust_acct_info:>45}\n"
             )
         return output
-
-    def _fetch_entry(self):
-        """Returns the db row for this modifier"""
-        bindings = {
-            'payment_uuid': self.payment_uuid}
-        return self.db_handle.cursor().execute(
-            self.QUERY, bindings
-        ).fetchone()
