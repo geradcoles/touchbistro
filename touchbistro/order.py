@@ -88,17 +88,6 @@ class Order(TouchBistroDBObject):
         ORDER BY ZORDER.Z_PK DESC LIMIT 1 /* there can be more than 1 */
     """
 
-    #: This query results in a list of order item ID numbers (foreign key into
-    #: the ZORDERITEM table)
-    LIST_ORDER_ITEM_QUERY = """SELECT
-            Z_52I_ORDERITEMS.Z_53I_ORDERITEMS AS ORDERITEM_ID
-        FROM Z_52I_ORDERITEMS
-        LEFT JOIN ZORDERITEM ON
-            ZORDERITEM.Z_PK = Z_52I_ORDERITEMS.Z_53I_ORDERITEMS
-        WHERE Z_52I_ORDERITEMS.Z_52I_ORDERS = :z_order_id
-        ORDER BY ZORDERITEM.ZI_INDEX ASC
-    """
-
     def __init__(self, db_location, **kwargs):
         super(Order, self).__init__(db_location, **kwargs)
         self.order_number = kwargs.get('order_number')
