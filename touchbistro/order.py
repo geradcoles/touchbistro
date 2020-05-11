@@ -6,7 +6,7 @@ from .base import TouchBistroDB
 from .dates import cocoa_2_datetime
 from .discount import ItemDiscountList
 from .modifier import ItemModifierList
-from .payment import Payment
+from .payment import PaymentGroup
 from .menu import MenuItem
 
 
@@ -97,15 +97,6 @@ class Order(TouchBistroDB):
             ZORDERITEM.Z_PK = Z_52I_ORDERITEMS.Z_53I_ORDERITEMS
         WHERE Z_52I_ORDERITEMS.Z_52I_ORDERS = :z_order_id
         ORDER BY ZORDERITEM.ZI_INDEX ASC
-    """
-
-    #: This query fetches UUIDs for all payments for the paid order, in order
-    #: of occurrence.
-    LIST_ORDER_PAYMENT_QUERY = """SELECT
-            ZUUID AS PAYMENT_UUID
-        FROM ZPAYMENT
-        WHERE ZPAYMENTGROUP = :payment_group_id
-        ORDER BY ZI_INDEX
     """
 
     def __init__(self, db_location, **kwargs):
@@ -253,13 +244,10 @@ class Order(TouchBistroDB):
     def payments(self):
         "Lazy-load Payment objects for this order and cache them internally"
         if self._payments is None:
-            self._payments = list()
-            for row in self._fetch_payments():
-                self._payments.append(
-                    Payment(
-                        self._db_location,
-                        payment_uuid=row['PAYMENT_UUID'])
-                )
+            self._payments = PaymentGroup(
+                self._db_location,
+                payment_group_id=self.payment_group_id
+            )
         return self._payments
 
     def subtotal(self):
@@ -359,11 +347,9 @@ class Order(TouchBistroDB):
         output = super(Order, self).summary()
         self.log.debug(output)
         output['order_items'] = list()
-        output['payments'] = list()
         for orderitem in self.order_items:
             output['order_items'].append(orderitem.summary())
-        for payment in self.payments:
-            output['payments'].append(payment.summary())
+        output['payments'] = self.payments.summary()
         # these are payment fields that are part of the base order, not from
         # ZPAYMENTS.
         loyalty_fields = [
@@ -389,14 +375,6 @@ class Order(TouchBistroDB):
             'z_order_id': self.order_id}
         return self.db_handle.cursor().execute(
             self.LIST_ORDER_ITEM_QUERY, bindings).fetchall()
-
-    def _fetch_payments(self):
-        """Returns an iterable of database results for payments associated
-        with this order"""
-        bindings = {
-            'payment_group_id': self.payment_group_id}
-        return self.db_handle.cursor().execute(
-            self.LIST_ORDER_PAYMENT_QUERY, bindings).fetchall()
 
 
 class OrderItem(TouchBistroDB):

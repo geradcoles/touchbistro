@@ -39,7 +39,7 @@ class ItemModifierList(ItemList):
         return self._items
 
     def _fetch_items(self):
-        """Returns a list of discount uuids from the DB for this order
+        """Returns a list of modifier uuids from the DB for this order
         item"""
         bindings = {
             'order_item_id': self.kwargs.get('order_item_id')}

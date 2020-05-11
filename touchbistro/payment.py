@@ -1,8 +1,7 @@
 """This module contains classes and functions to work with TouchBistro
 payments.
 """
-import logging
-from .base import TouchBistroDB
+from .base import TouchBistroDB, ItemList
 from .dates import cocoa_2_datetime
 
 
@@ -17,6 +16,50 @@ def payment_type_name(type_id):
     return PAYMENT_TYPES[type_id]
 
 
+class PaymentGroup(ItemList):
+    """Use this class to get a list of Payment objects for a payment group.
+    It behaves like a sequence, where you can simply iterate over the object,
+    or call it with an index to get a particular item.
+
+    kwargs:
+        - payment_group_id
+    """
+
+    #: Query to get a list of modifier uuids for this order item
+    QUERY = """SELECT
+            ZUUID
+        FROM ZPAYMENT
+        WHERE ZPAYMENTGROUP = :payment_group_id
+        ORDER BY ZI_INDEX ASC
+        """
+
+    def total_amount(self):
+        "Returns the total value of payments in the list"
+        amount = 0.0
+        for payment in self.items:
+            amount += payment.amount
+        return amount
+
+    @property
+    def items(self):
+        "Returns the discounts as a list, caching db results"
+        if self._items is None:
+            self._items = list()
+            for row in self._fetch_items():
+                self._items.append(
+                    Payment(
+                        self._db_location,
+                        payment_uuid=row['ZUUID']))
+        return self._items
+
+    def _fetch_items(self):
+        """Returns a list of payments from the DB for this payment group"""
+        bindings = {
+            'payment_group_id': self.kwargs.get('payment_group_id')}
+        return self.db_handle.cursor().execute(
+            self.QUERY, bindings).fetchall()
+
+
 class Payment(TouchBistroDB):
     """This class represents a single payment on an Order.
 
@@ -26,12 +69,12 @@ class Payment(TouchBistroDB):
         - payment_uuid: the UUID for this payment
     """
 
-    META_FIELDS = ['payment_uuid', 'payment_number', 'payment_type',
-                   'payment_type_id',
-                   'amount', 'tip', 'change', 'balance',
-                   'refundable_amount', 'original_payment_uuid',
-                   'customer_account_id', 'customer_id',
-                   'card_type', 'auth_number', 'create_date']
+    META_ATTRIBUTES = ['payment_uuid', 'payment_number', 'payment_type',
+                       'payment_type_id',
+                       'amount', 'tip', 'change', 'balance',
+                       'refundable_amount', 'original_payment_uuid',
+                       'customer_account_id', 'customer_id',
+                       'card_type', 'auth_number', 'create_date']
 
     #: Query to get details about this discount
     QUERY = """SELECT
@@ -54,11 +97,7 @@ class Payment(TouchBistroDB):
 
     def __init__(self, db_location, **kwargs):
         super(Payment, self).__init__(db_location, **kwargs)
-        self.log = logging.getLogger("{}.{}".format(
-            self.__class__.__module__, self.__class__.__name__
-        ))
         self.payment_uuid = kwargs.get('payment_uuid')
-        self._db_details = None
 
     @property
     def payment_number(self):
@@ -157,24 +196,6 @@ class Payment(TouchBistroDB):
         except TypeError:
             return None
 
-    @property
-    def db_details(self):
-        "Returns cached results for the :attr:`QUERY` specified above"
-        if self._db_details is None:
-            self._db_details = dict()
-            result = self._fetch_payment()
-            for key in result.keys():
-                # perform the dict copy
-                self._db_details[key] = result[key]
-        return self._db_details
-
-    def summary(self):
-        """Return a dictionary summary of the order"""
-        summary = {'meta': dict()}
-        for field in self._meta_fields():
-            summary['meta'][field[0]] = field[1]
-        return summary
-
     def receipt_form(self):
         """Output payment info in a form suitable for receipts"""
         pay_type = ""
@@ -197,22 +218,10 @@ class Payment(TouchBistroDB):
             )
         return output
 
-    def _fetch_payment(self):
+    def _fetch_entry(self):
         """Returns the db row for this modifier"""
         bindings = {
             'payment_uuid': self.payment_uuid}
         return self.db_handle.cursor().execute(
             self.QUERY, bindings
         ).fetchone()
-
-    def _meta_fields(self):
-        """Yields an iterable of key-value pairs in 2-tuples"""
-        for field in self.META_FIELDS:
-            yield tuple((field, getattr(self, field)))
-
-    def __str__(self):
-        "Return a pretty-printed string-version of the payment"
-        payment = "Payment(\n"
-        for field in self._meta_fields():
-            payment += f"  {field[0]}: {field[1]}\n"
-        payment += ")\n"

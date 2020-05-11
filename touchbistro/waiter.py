@@ -1,5 +1,4 @@
 """Contain classes and functions for reeading and reporting on Waiters"""
-import logging
 from .base import TouchBistroDB
 
 
@@ -13,6 +12,9 @@ class Waiter(TouchBistroDB):
         - waiter_uuid: Key to the ZWAITER table
     """
 
+    META_ATTRIBUTES = ['waiter_uuid', 'waiter_id', 'display_name', 'firstname',
+                       'lastname', 'email']
+
     #: Query to get details about this discount
     QUERY = """SELECT
         *
@@ -22,11 +24,7 @@ class Waiter(TouchBistroDB):
 
     def __init__(self, db_location, **kwargs):
         super(Waiter, self).__init__(db_location, **kwargs)
-        self.log = logging.getLogger("{}.{}".format(
-            self.__class__.__module__, self.__class__.__name__
-        ))
         self.waiter_uuid = kwargs.get('waiter_uuid')
-        self._db_details = None
 
     @property
     def waiter_id(self):
@@ -68,43 +66,10 @@ class Waiter(TouchBistroDB):
         "Returns the passcode the user uses to log into TouchBistro"
         return self.db_details['ZPASSCODE']
 
-    @property
-    def db_details(self):
-        "Returns cached results for the :attr:`QUERY` specified above"
-        if self._db_details is None:
-            self._db_details = dict()
-            result = self._fetch_waiter()
-            for key in result.keys():
-                # perform the dict copy
-                self._db_details[key] = result[key]
-        return self._db_details
-
-    def _fetch_waiter(self):
+    def _fetch_entry(self):
         """Returns the db row for this waiter"""
         bindings = {
             'waiter_uuid': self.waiter_uuid}
         return self.db_handle.cursor().execute(
             self.QUERY, bindings
         ).fetchone()
-
-    def summary(self):
-        """Returns a dictionary of attributes about this waiter"""
-        summary = {'meta': dict()}
-        fields = ['waiter_uuid', 'waiter_id', 'display_name', 'firstname',
-                  'lastname', 'email']
-        for field in fields:
-            summary['meta'][field] = getattr(self, field)
-        return summary
-
-    def __str__(self):
-        "Return a pretty string to represent the waiter"
-        return (
-            f"Waiter(\n"
-            f"  waiter_uuid: {self.waiter_uuid}\n"
-            f"  waiter_id: {self.waiter_id}\n"
-            f"  display_name: {self.display_name}\n"
-            f"  firstname: {self.firstname}\n"
-            f"  lastname: {self.lastname}\n"
-            f"  email: {self.email}\n"
-            ")"
-        )
