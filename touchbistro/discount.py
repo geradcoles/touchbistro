@@ -1,6 +1,6 @@
 """This module contains classes and functions to work with item discounts"""
 import logging
-from lib7shifts.cmd.common import Sync7Shifts2Sqlite
+from .base import TouchBistroDB
 from .dates import cocoa_2_datetime
 from .waiter import Waiter
 
@@ -9,7 +9,7 @@ from .waiter import Waiter
 DISCOUNT_TYPES = ("Void", "Discount")
 
 
-class ItemDiscount(Sync7Shifts2Sqlite):
+class ItemDiscount(TouchBistroDB):
     """This class represents a single discount on an OrderItem.
 
     OrderItems may have more than one discount applied.

@@ -1,7 +1,7 @@
 """Module to handle queries on the ZPAIDORDER table
 """
 import logging
-from lib7shifts.cmd.common import Sync7Shifts2Sqlite
+from .base import TouchBistroDB
 from .dates import unixepoch_2_cocoa
 
 
@@ -18,7 +18,7 @@ ZI_TAKEOUTTYPE_MAP = {
 }
 
 
-class PaidOrders(Sync7Shifts2Sqlite):
+class PaidOrders(TouchBistroDB):
     """Obtain a paid order summary for the given date range.
 
     kwargs:

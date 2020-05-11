@@ -1,9 +1,9 @@
 """Contain classes and functions for working with order item modifiers"""
 import logging
-from lib7shifts.cmd.common import Sync7Shifts2Sqlite
+from .base import TouchBistroDB
 
 
-class ItemModifier(Sync7Shifts2Sqlite):
+class ItemModifier(TouchBistroDB):
     """Class to represent an order item Modifier in TouchBistro. Corresponds
     to the ZMODIFIER table.
 

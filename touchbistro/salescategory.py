@@ -6,11 +6,11 @@ by the ZTYPEID column, referenced from the ZTYPE column on a MenuItem.
 """
 import sqlite3
 import logging
-from lib7shifts.cmd.common import Sync7Shifts2Sqlite
+from .base import TouchBistroDB
 from .dates import cocoa_2_datetime
 
 
-class SalesCategory(Sync7Shifts2Sqlite):
+class SalesCategory(TouchBistroDB):
     """This class represents a sales category from the ZITEMTYPE table
 
     kwargs:

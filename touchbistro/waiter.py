@@ -1,9 +1,9 @@
 """Contain classes and functions for reeading and reporting on Waiters"""
 import logging
-from lib7shifts.cmd.common import Sync7Shifts2Sqlite
+from .base import TouchBistroDB
 
 
-class Waiter(Sync7Shifts2Sqlite):
+class Waiter(TouchBistroDB):
     """Class to represent a Staff Member (waiter) in TouchBistro. Corresponds
     to the ZWAITER table.
 

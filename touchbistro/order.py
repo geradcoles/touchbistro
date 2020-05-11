@@ -3,7 +3,7 @@ etc.
 """
 import logging
 import decimal
-from lib7shifts.cmd.common import Sync7Shifts2Sqlite
+from .base import TouchBistroDB
 from .dates import cocoa_2_datetime
 from .discount import ItemDiscount
 from .modifier import ItemModifier
@@ -24,7 +24,7 @@ ZI_TAKEOUTTYPE_MAP = {
 }
 
 
-class Order(Sync7Shifts2Sqlite):
+class Order(TouchBistroDB):
     """Get detailed information about an order.
 
     kwargs:
@@ -414,7 +414,7 @@ class Order(Sync7Shifts2Sqlite):
             self.LIST_ORDER_PAYMENT_QUERY, bindings).fetchall()
 
 
-class OrderItem(Sync7Shifts2Sqlite):
+class OrderItem(TouchBistroDB):
     """Get information about an individual order item.
 
     kwargs:

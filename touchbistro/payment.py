@@ -2,7 +2,7 @@
 payments.
 """
 import logging
-from lib7shifts.cmd.common import Sync7Shifts2Sqlite
+from .base import TouchBistroDB
 from .dates import cocoa_2_datetime
 
 
@@ -17,7 +17,7 @@ def payment_type_name(type_id):
     return PAYMENT_TYPES[type_id]
 
 
-class Payment(Sync7Shifts2Sqlite):
+class Payment(TouchBistroDB):
     """This class represents a single payment on an Order.
 
     Required kwargs:

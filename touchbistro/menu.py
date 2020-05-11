@@ -1,7 +1,7 @@
 """This module provides classes and methods for viewing and reporting on menu
 items in TouchBistro"""
 import logging
-from lib7shifts.cmd.common import Sync7Shifts2Sqlite
+from .base import TouchBistroDB
 from .dates import cocoa_2_datetime, datetime_2_cocoa
 from .changelog import ChangeLogEntry, SearchChangeLog
 from .salescategory import SalesCategory
@@ -40,7 +40,7 @@ class MenuChangeLogEntry(ChangeLogEntry):
         return None
 
 
-class MenuItem(Sync7Shifts2Sqlite):
+class MenuItem(TouchBistroDB):
     """This class represents a menu item from the ZMENUITEM table.
 
     kwargs:
@@ -319,7 +319,7 @@ class MenuItem(Sync7Shifts2Sqlite):
         return output
 
 
-class MenuCategory(Sync7Shifts2Sqlite):
+class MenuCategory(TouchBistroDB):
     """This class represents a menu category from the ZMENUCATEGORY table
 
     kwargs:
@@ -331,7 +331,8 @@ class MenuCategory(Sync7Shifts2Sqlite):
     #: of this object, as well as the string version.
     META_ATTRIBUTES = ['category_uuid', 'category_id', 'name', 'course',
                        'custom', 'index', 'sorting', 'tax1', 'tax2', 'tax3',
-                       'hidden', 'show_in_public_menu', 'sales_category_id',
+                       'hidden', 'show_in_public_menu',
+                       'sales_category_type_id',
                        'hidden_schedule_id', 'kitchen_display_id',
                        'printer_id', 'station_id', 'created_date', 'image']
 
@@ -355,6 +356,7 @@ class MenuCategory(Sync7Shifts2Sqlite):
             self.__class__.__module__, self.__class__.__name__
         ))
         self._db_details = kwargs.get('db_details', None)
+        self._sales_category = None
 
     @property
     def category_uuid(self):
@@ -412,14 +414,18 @@ class MenuCategory(Sync7Shifts2Sqlite):
         return self.db_details['ZSHOWINPUBLICMENU']
 
     @property
-    def sales_category_id(self):
+    def sales_category_type_id(self):
         "Returns the sales category as an integer ID"
         return self.db_details['ZTYPE']
 
     @property
     def sales_category(self):
         "Returns a sales category object for the menu category"
-        pass
+        if self._sales_category is None:
+            self._sales_category = SalesCategory(
+                self._db_location,
+                category_type_id=self.sales_category_type_id)
+        return self._sales_category
 
     @property
     def hidden_schedule_id(self):

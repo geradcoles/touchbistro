@@ -14,11 +14,11 @@ changes, it can directly load waiter objects from the log rather than using
 convenience methods found within a ChangeLogEntry.
 """
 import logging
-from lib7shifts.cmd.common import Sync7Shifts2Sqlite
+from .base import TouchBistroDB
 from .dates import cocoa_2_datetime, datetime_2_cocoa
 
 
-class SearchChangeLog(Sync7Shifts2Sqlite):
+class SearchChangeLog(TouchBistroDB):
     """This class provides a mechanism for conveniently searching the changelog
     based on arbitrary criteria. Search results are simply yielded out as
     iterables of ChangeLogEntry objects.
@@ -97,7 +97,7 @@ class SearchChangeLog(Sync7Shifts2Sqlite):
             yield ChangeLogEntry.from_db_row(self._db_location, row)
 
 
-class ChangeLogEntry(Sync7Shifts2Sqlite):
+class ChangeLogEntry(TouchBistroDB):
     """This class represents a change log entry in the ZCHANGELOG table
 
     kwargs:
