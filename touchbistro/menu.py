@@ -1,9 +1,8 @@
 """This module provides classes and methods for viewing and reporting on menu
 items in TouchBistro"""
-import logging
 from .base import TouchBistroDB
-from .dates import cocoa_2_datetime, datetime_2_cocoa
-from .changelog import ChangeLogEntry, SearchChangeLog
+from .dates import cocoa_2_datetime
+from .changelog import ChangeLogEntry
 from .salescategory import SalesCategory
 
 
@@ -24,9 +23,6 @@ class MenuChangeLogEntry(ChangeLogEntry):
                        'object_reference',
                        'object_reference_type', 'user_uuid',
                        'value_changed_from', 'value_changed_to']
-
-    def __init__(self, db_location, **kwargs):
-        super(MenuChangeLogEntry, self).__init__(db_location, **kwargs)
 
     def get_menu_item(self):
         """Returns a Menu object representing the menu item being updated.
@@ -74,13 +70,9 @@ class MenuItem(TouchBistroDB):
 
     def __init__(self, db_location, **kwargs):
         super(MenuItem, self).__init__(db_location, **kwargs)
-        self.log = logging.getLogger("{}.{}".format(
-            self.__class__.__module__, self.__class__.__name__
-        ))
         self.menuitem_uuid = kwargs.get('menuitem_uuid')
         self._menu_category = None
         self._sales_category = None
-        self._db_details = kwargs.get('db_details', None)
 
     @property
     def menu_id(self):
@@ -280,23 +272,9 @@ class MenuItem(TouchBistroDB):
         "Returns the upc code for the menu item"
         return self.db_details['ZUPC']
 
-    @property
-    def db_details(self):
-        "Returns cached results for the :attr:`QUERY` specified above"
-        if self._db_details is None:
-            self._db_details = dict()
-            result = self._fetch_entry()
-            for key in result.keys():
-                # perform the dict copy
-                self._db_details[key] = result[key]
-        return self._db_details
-
     def summary(self):
         """Returns a dictionary version of the change"""
-        output = {'meta': dict(), 'menu_category': dict(),
-                  'sales_category': dict()}
-        for attr in self.META_ATTRIBUTES:
-            output['meta'][attr] = getattr(self, attr)
+        output = super(MenuItem, self).summary()
         output['menu_category'] = self.menu_category.summary()
         output['sales_category'] = self.sales_category.summary()
         return output
@@ -308,15 +286,6 @@ class MenuItem(TouchBistroDB):
         return self.db_handle.cursor().execute(
             self.QUERY, bindings
         ).fetchone()
-
-    def __str__(self):
-        "Return a string-formatted version of this change"
-        summary = self.summary()
-        output = "MenuItem(\n"
-        for attr in self.META_ATTRIBUTES:
-            output += f"  {attr}: {summary[attr]}\n"
-        output += ")"
-        return output
 
 
 class MenuCategory(TouchBistroDB):
@@ -352,10 +321,6 @@ class MenuCategory(TouchBistroDB):
 
     def __init__(self, db_location, **kwargs):
         super(MenuCategory, self).__init__(db_location, **kwargs)
-        self.log = logging.getLogger("{}.{}".format(
-            self.__class__.__module__, self.__class__.__name__
-        ))
-        self._db_details = kwargs.get('db_details', None)
         self._sales_category = None
 
     @property
@@ -469,24 +434,6 @@ class MenuCategory(TouchBistroDB):
         "Returns the name of the menu item"
         return self.db_details['ZNAME']
 
-    @property
-    def db_details(self):
-        "Returns cached results for the :attr:`QUERY` specified above"
-        if self._db_details is None:
-            self._db_details = dict()
-            result = self._fetch_entry()
-            for key in result.keys():
-                # perform the dict copy
-                self._db_details[key] = result[key]
-        return self._db_details
-
-    def summary(self):
-        """Returns a dictionary version of the change"""
-        output = dict()
-        for attr in self.META_ATTRIBUTES:
-            output[attr] = getattr(self, attr)
-        return output
-
     def _fetch_entry(self):
         """Returns the db row for this menuitem entry"""
         bindings = dict()
@@ -499,12 +446,3 @@ class MenuCategory(TouchBistroDB):
             return self.db_handle.cursor().execute(
                 self.QUERY_BY_ID, bindings).fetchone()
         return None
-
-    def __str__(self):
-        "Return a string-formatted version of this change"
-        summary = self.summary()
-        output = "MenuCategory(\n"
-        for attr in self.META_ATTRIBUTES:
-            output += f"  {attr}: {summary[attr]}\n"
-        output += ")"
-        return output

@@ -1,12 +1,11 @@
 """Module to get information about orders, such as order totals, menu items,
 etc.
 """
-import logging
 import decimal
 from .base import TouchBistroDB
 from .dates import cocoa_2_datetime
-from .discount import ItemDiscount
-from .modifier import ItemModifier
+from .discount import ItemDiscountList
+from .modifier import ItemModifierList
 from .payment import Payment
 from .menu import MenuItem
 
@@ -33,6 +32,13 @@ class Order(TouchBistroDB):
 
     Results are a multi-column format containing details about the order.
     """
+
+    META_ATTRIBUTES = [
+        'order_uuid', 'order_id', 'outstanding_balance',
+        'order_number', 'order_type', 'table_name',
+        'bill_number', 'party_name', 'party_as_split_order',
+        'custom_takeout_type', 'waiter_name', 'paid_datetime'
+    ]
 
     #: Query to get as much information about an order as possible based on its
     #: public-facing order ID number.
@@ -104,11 +110,7 @@ class Order(TouchBistroDB):
 
     def __init__(self, db_location, **kwargs):
         super(Order, self).__init__(db_location, **kwargs)
-        self.log = logging.getLogger("{}.{}".format(
-            self.__class__.__module__, self.__class__.__name__
-        ))
         self.order_number = kwargs.get('order_number')
-        self._db_details = None
         self._order_items = None
         self._payments = None
         self._taxes = None
@@ -236,16 +238,6 @@ class Order(TouchBistroDB):
         return self.db_details['ZI_TAX3']
 
     @property
-    def db_details(self):
-        "Lazy-load order info from DB on first request, cache it after that"
-        if self._db_details is None:
-            self._db_details = dict()
-            result = self._fetch_order()
-            for key in result.keys():
-                self._db_details[key] = result[key]
-        return self._db_details
-
-    @property
     def order_items(self):
         "Lazy-load order items on the first attempt to read them, then cache"
         if self._order_items is None:
@@ -364,15 +356,10 @@ class Order(TouchBistroDB):
         - payment: contains a dictionary of payment information for the order
 
         """
-        output = {'meta': dict(), 'order_items': list(), 'payments': list()}
-        meta_fields = [
-            'order_uuid', 'order_id', 'outstanding_balance',
-            'order_number', 'order_type', 'table_name',
-            'bill_number', 'party_name', 'party_as_split_order',
-            'custom_takeout_type', 'waiter_name', 'paid_datetime'
-        ]
-        for field in meta_fields:
-            output['meta'][field] = getattr(self, field)
+        output = super(Order, self).summary()
+        self.log.debug(output)
+        output['order_items'] = list()
+        output['payments'] = list()
         for orderitem in self.order_items:
             output['order_items'].append(orderitem.summary())
         for payment in self.payments:
@@ -383,14 +370,12 @@ class Order(TouchBistroDB):
             'loyalty_account_name', 'loyalty_credit_balance',
             'loyalty_point_balance'
         ]
-        loyalty_info = dict()
+        output['meta']['loyalty_info'] = dict()
         for field in loyalty_fields:
-            loyalty_info[field] = getattr(self, field)
-        if loyalty_info:
-            output['meta']['loyalty_info'] = loyalty_info
+            output['meta']['loyalty_info'][field] = getattr(self, field)
         return output
 
-    def _fetch_order(self):
+    def _fetch_entry(self):
         """Returns a summary list of dicts as per the class summary"""
         bindings = {
             'order_number': self.order_number}
@@ -424,6 +409,9 @@ class OrderItem(TouchBistroDB):
     Results are a multi-column format containing details about the item.
     """
 
+    META_ATTRIBUTES = ['order_item_id', 'quantity',
+                       'open_price', 'waiter_name', 'was_sent', 'sent_time']
+
     QUERY = """SELECT
             ZORDERITEM.ZMENUITEMUUID,
             ZORDERITEM.ZI_QUANTITY, ZORDERITEM.ZI_OPENPRICE,
@@ -437,29 +425,9 @@ class OrderItem(TouchBistroDB):
         WHERE ZORDERITEM.Z_PK = :order_item_id
     """
 
-    #: Query to get a list of discount PK's for this order item
-    DISCOUNT_QUERY = """SELECT
-        ZUUID
-        FROM ZDISCOUNT
-        WHERE ZORDERITEM = :order_item_id
-        ORDER BY ZI_INDEX ASC
-        """
-
-    #: Query to get a list of modifier UUID's for this order item
-    MODIFIER_QUERY = """SELECT
-        ZUUID
-        FROM ZMODIFIER
-        WHERE ZCONTAINERORDERITEM = :order_item_id
-        ORDER BY ZI_INDEX ASC
-        """
-
     def __init__(self, db_location, **kwargs):
         super(OrderItem, self).__init__(db_location, **kwargs)
-        self.log = logging.getLogger("{}.{}".format(
-            self.__class__.__module__, self.__class__.__name__
-        ))
         self.order_item_id = kwargs.get('order_item_id')
-        self._db_details = None
         self._discounts = None
         self._modifiers = None
         self._menu_item = None
@@ -503,18 +471,11 @@ class OrderItem(TouchBistroDB):
 
     def summary(self):
         """Returns a dictionary summary of this order item"""
-        summary = {
-            'meta': dict(), 'modifiers': list(), 'discounts': list(),
-            'menu_item': dict()}
-        fields = ['order_item_id', 'quantity',
-                  'open_price', 'waiter_name', 'was_sent', 'sent_time']
-        for field in fields:
-            summary['meta'][field] = getattr(self, field)
+        summary = super(OrderItem, self).summary()
+        summary['modifiers'] = list()
         summary['menu_item'] = self.menu_item.summary()
-        for modifier in self.get_modifiers():
-            summary['modifiers'].append(modifier.summary())
-        for discount in self.get_discounts():
-            summary['discounts'].append(discount.summary())
+        summary['modifiers'] = self.modifiers.summary()
+        summary['discounts'] = self.discounts.summary()
         return summary
 
     def receipt_form(self):
@@ -533,11 +494,11 @@ class OrderItem(TouchBistroDB):
         output += "{:38s} ${:3.2f}\n".format(
             name, self.base_price())
         has_price_mod = False
-        for modifier in self.get_modifiers():
+        for modifier in self.modifiers:
             output += "  " + modifier.receipt_form()
             if modifier.price:
                 has_price_mod = True
-        for discount in self.get_discounts():
+        for discount in self.discounts:
             output += "  " + discount.receipt_form()
             if discount.amount:
                 has_price_mod = True
@@ -569,90 +530,33 @@ class OrderItem(TouchBistroDB):
 
         Tax is not included by default"""
         amount = self.base_price()
-        amount -= self.discount_total()
-        amount += self.modifier_total()
+        amount -= self.discounts.total()
+        amount += self.modifiers.total()
         return amount
 
     @property
-    def db_details(self):
-        "Fetch/Cache and Return the database results for this order item ID"
-        if self._db_details is None:
-            self._db_details = dict()
-            result = self._fetch_order_item()
-            for key in result.keys():
-                self._db_details[key] = result[key]
-        return self._db_details
-
-    def get_discounts(self):
+    def discounts(self):
         """Returns a list of ItemDiscount objects for this order item"""
         if self._discounts is None:
-            self._discounts = list()
-            for row in self._fetch_discounts():
-                self._discounts.append(
-                    ItemDiscount(self._db_location,
-                                 discount_uuid=row['ZUUID']))
+            self._discounts = ItemDiscountList(
+                self._db_location,
+                order_item_id=self.order_item_id)
         return self._discounts
 
-    def get_modifiers(self):
+    @property
+    def modifiers(self):
         """Returns a list of ItemModifier objects for this order item"""
         if self._modifiers is None:
-            self._modifiers = list()
-            for row in self._fetch_modifiers():
-                self._modifiers.append(
-                    ItemModifier(self._db_location,
-                                 modifier_uuid=row['ZUUID']))
+            self._modifiers = ItemModifierList(
+                self._db_location,
+                order_item_id=self.order_item_id
+            )
         return self._modifiers
 
-    def discount_total(self):
-        """Returns the total discounted amount for this Order Item"""
-        amount = 0.0
-        for discount in self.get_discounts():
-            amount += discount.amount
-        return amount
-
-    def modifier_total(self):
-        "Returns the total value of all modifiers applied to this item"
-        amount = 0.0
-        for modifier in self.get_modifiers():
-            amount += modifier.price
-        return amount
-
-    def _fetch_order_item(self):
+    def _fetch_entry(self):
         """Returns a summary list of dicts as per the class summary"""
         bindings = {
             'order_item_id': self.order_item_id}
         return self.db_handle.cursor().execute(
             self.QUERY, bindings
         ).fetchone()
-
-    def _fetch_discounts(self):
-        """Returns a list of discount uuids from the DB for this order
-        item"""
-        bindings = {
-            'order_item_id': self.order_item_id}
-        return self.db_handle.cursor().execute(
-            self.DISCOUNT_QUERY, bindings
-        ).fetchall()
-
-    def _fetch_modifiers(self):
-        """Returns a list of modifier uuids from the DB for this order
-        item"""
-        bindings = {
-            'order_item_id': self.order_item_id}
-        return self.db_handle.cursor().execute(
-            self.MODIFIER_QUERY, bindings
-        ).fetchall()
-
-    def __str__(self):
-        "Provide a nice string representation of the Order Item"
-        return(
-            f"OrderItem(\n"
-            f"  order_item_id: {self.order_item_id}\n"
-            f"  name: {self.menu_item.name}\n"
-            f"  quantity: {self.quantity}\n"
-            f"  base_price: {self.base_price}\n"
-            f"  waiter_name: {self.waiter_name}\n"
-            f"  course_number: {self.course_number}\n"
-            f"  sent_time: {self.sent_time}\n"
-            ")"
-        )

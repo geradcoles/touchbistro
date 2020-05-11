@@ -13,7 +13,6 @@ library load. In this way, if a Waiter object is looking at the log of waiter
 changes, it can directly load waiter objects from the log rather than using
 convenience methods found within a ChangeLogEntry.
 """
-import logging
 from .base import TouchBistroDB
 from .dates import cocoa_2_datetime, datetime_2_cocoa
 
@@ -53,12 +52,6 @@ class SearchChangeLog(TouchBistroDB):
             ZTIMESTAMP < :cutoff_time
         ORDER BY Z_PK DESC
     """
-
-    def __init__(self, db_location, **kwargs):
-        super(SearchChangeLog, self).__init__(db_location, **kwargs)
-        self.log = logging.getLogger("{}.{}".format(
-            self.__class__.__module__, self.__class__.__name__
-        ))
 
     def get_changes_by_order_number(self, order_number):
         """Returns all changes for the order corresponding to the
@@ -122,11 +115,7 @@ class ChangeLogEntry(TouchBistroDB):
 
     def __init__(self, db_location, **kwargs):
         super(ChangeLogEntry, self).__init__(db_location, **kwargs)
-        self.log = logging.getLogger("{}.{}".format(
-            self.__class__.__module__, self.__class__.__name__
-        ))
         self.changelog_uuid = kwargs.get('changelog_uuid')
-        self._db_details = kwargs.get('db_details', None)
 
     @property
     def change_id(self):
@@ -187,24 +176,6 @@ class ChangeLogEntry(TouchBistroDB):
                   changelog_uuid=rowdata['ZUUID'], db_details=db_details)
         return obj
 
-    @property
-    def db_details(self):
-        "Returns cached results for the :attr:`QUERY` specified above"
-        if self._db_details is None:
-            self._db_details = dict()
-            result = self._fetch_entry()
-            for key in result.keys():
-                # perform the dict copy
-                self._db_details[key] = result[key]
-        return self._db_details
-
-    def summary(self):
-        """Returns a dictionary version of the change"""
-        output = dict()
-        for attr in self.META_ATTRIBUTES:
-            output[attr] = getattr(self, attr)
-        return output
-
     def _fetch_entry(self):
         """Returns the db row for this changelog entry"""
         bindings = {
@@ -212,12 +183,3 @@ class ChangeLogEntry(TouchBistroDB):
         return self.db_handle.cursor().execute(
             self.QUERY, bindings
         ).fetchone()
-
-    def __str__(self):
-        "Return a string-formatted version of this change"
-        summary = self.summary()
-        output = "ChangeLogEntry(\n"
-        for attr in self.META_ATTRIBUTES:
-            output += f"  {attr}: {summary[attr]}\n"
-        output += ")"
-        return output

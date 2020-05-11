@@ -1,6 +1,51 @@
 """Contain classes and functions for working with order item modifiers"""
-import logging
-from .base import TouchBistroDB
+from .base import TouchBistroDB, ItemList
+
+
+class ItemModifierList(ItemList):
+    """Use this class to get a list of ItemModifier objects for an OrderItem.
+    It behaves like a sequence, where you can simply iterate over the object,
+    or call it with an index to get a particular item.
+
+    kwargs:
+        - order_item_id
+    """
+
+    #: Query to get a list of modifier uuids for this order item
+    QUERY = """SELECT
+        ZUUID
+        FROM ZMODIFIER
+        WHERE ZCONTAINERORDERITEM = :order_item_id
+        ORDER BY ZI_INDEX ASC
+        """
+
+    def total(self):
+        "Returns the total value of modifiers in the list"
+        amount = 0.0
+        for modifier in self.items:
+            amount += modifier.price
+        return amount
+
+    @property
+    def items(self):
+        "Returns the discounts as a list, caching db results"
+        if self._items is None:
+            self._items = list()
+            for row in self._fetch_items():
+                self._items.append(
+                    ItemModifier(
+                        self._db_location,
+                        modifier_uuid=row['ZUUID']))
+        return self._items
+
+    def _fetch_items(self):
+        """Returns a list of discount uuids from the DB for this order
+        item"""
+        bindings = {
+            'order_item_id': self.kwargs.get('order_item_id')}
+        return self.db_handle.cursor().execute(
+            self.QUERY, bindings
+        ).fetchall()
 
 
 class ItemModifier(TouchBistroDB):
@@ -33,6 +78,12 @@ class ItemModifier(TouchBistroDB):
 
     """
 
+    META_ATTRIBUTES = ['modifier_uuid', 'modifier_id', 'name', 'price',
+                       'is_required', 'container_order_item_id',
+                       'menu_item_id',
+                       'modifier_group_id', 'modifier_group_for_menu_item',
+                       'order_item', 'creation_date']
+
     #: Query to get details about this discount
     QUERY = """SELECT
         ZMODIFIER.*,
@@ -45,11 +96,7 @@ class ItemModifier(TouchBistroDB):
 
     def __init__(self, db_location, **kwargs):
         super(ItemModifier, self).__init__(db_location, **kwargs)
-        self.log = logging.getLogger("{}.{}".format(
-            self.__class__.__module__, self.__class__.__name__
-        ))
         self.modifier_uuid = kwargs.get('modifier_uuid')
-        self._db_details = None
 
     @property
     def modifier_id(self):
@@ -110,18 +157,7 @@ class ItemModifier(TouchBistroDB):
             return self.db_details['MENU_ITEM_NAME']
         return self.db_details['ZI_NAME']
 
-    @property
-    def db_details(self):
-        "Returns cached results for the :attr:`QUERY` specified above"
-        if self._db_details is None:
-            self._db_details = dict()
-            result = self._fetch_modifier()
-            for key in result.keys():
-                # perform the dict copy
-                self._db_details[key] = result[key]
-        return self._db_details
-
-    def _fetch_modifier(self):
+    def _fetch_entry(self):
         """Returns the db row for this modifier"""
         bindings = {
             'modifier_uuid': self.modifier_uuid}
@@ -144,33 +180,3 @@ class ItemModifier(TouchBistroDB):
                     err
                 )
             )
-
-    def summary(self):
-        """Returns a dictionary summary of this modifier"""
-        summary = {'meta': dict()}
-        fields = ['modifier_uuid', 'modifier_id', 'name', 'price',
-                  'is_required', 'container_order_item_id', 'menu_item_id',
-                  'modifier_group_id', 'modifier_group_for_menu_item',
-                  'order_item', 'creation_date']
-        for field in fields:
-            summary['meta'][field] = getattr(self, field)
-        return summary
-
-    def __str__(self):
-        "Return a pretty string to represent the waiter"
-        return (
-            f"Modifier(\n"
-            f"  modifier_uuid: {self.modifier_uuid}\n"
-            f"  modifier_id: {self.modifier_id}\n"
-            f"  name: {self.name}\n"
-            f"  price: {self.price}\n"
-            f"  is_required: {self.is_required}\n"
-            f"  container_order_item_id: {self.container_order_item_id}\n"
-            f"  menu_item_id: {self.menu_item_id}\n"
-            f"  modifier_group_id: {self.modifier_group_id}\n"
-            "  modifier_group_for_menu_item: "
-            f"{self.modifier_group_for_menu_item}\n"
-            f"  order_item: {self.order_item}\n"
-            f"  creation_date: {self.creation_date}\n"
-            ")"
-        )
