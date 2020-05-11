@@ -1,8 +1,8 @@
 """Contain classes and functions for reeading and reporting on Waiters"""
-from .base import TouchBistroDB
+from .base import TouchBistroDBObject
 
 
-class Waiter(TouchBistroDB):
+class Waiter(TouchBistroDBObject):
     """Class to represent a Staff Member (waiter) in TouchBistro. Corresponds
     to the ZWAITER table.
 

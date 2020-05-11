@@ -4,11 +4,11 @@ to report on them.
 Sales categories are found in the ZITEMTYPE table, and can by sourced
 by the ZTYPEID column, referenced from the ZTYPE column on a MenuItem.
 """
-from .base import TouchBistroDB
+from .base import TouchBistroDBObject
 from .dates import cocoa_2_datetime
 
 
-class SalesCategory(TouchBistroDB):
+class SalesCategory(TouchBistroDBObject):
     """This class represents a sales category from the ZITEMTYPE table
 
     kwargs:

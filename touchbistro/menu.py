@@ -1,6 +1,6 @@
 """This module provides classes and methods for viewing and reporting on menu
 items in TouchBistro"""
-from .base import TouchBistroDB
+from .base import TouchBistroDBObject
 from .dates import cocoa_2_datetime
 from .changelog import ChangeLogEntry
 from .salescategory import SalesCategory
@@ -36,7 +36,7 @@ class MenuChangeLogEntry(ChangeLogEntry):
         return None
 
 
-class MenuItem(TouchBistroDB):
+class MenuItem(TouchBistroDBObject):
     """This class represents a menu item from the ZMENUITEM table.
 
     kwargs:
@@ -288,7 +288,7 @@ class MenuItem(TouchBistroDB):
         ).fetchone()
 
 
-class MenuCategory(TouchBistroDB):
+class MenuCategory(TouchBistroDBObject):
     """This class represents a menu category from the ZMENUCATEGORY table
 
     kwargs:

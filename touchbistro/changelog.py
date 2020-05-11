@@ -13,11 +13,11 @@ library load. In this way, if a Waiter object is looking at the log of waiter
 changes, it can directly load waiter objects from the log rather than using
 convenience methods found within a ChangeLogEntry.
 """
-from .base import TouchBistroDB
+from .base import TouchBistroDBObject
 from .dates import cocoa_2_datetime, datetime_2_cocoa
 
 
-class SearchChangeLog(TouchBistroDB):
+class SearchChangeLog(TouchBistroDBObject):
     """This class provides a mechanism for conveniently searching the changelog
     based on arbitrary criteria. Search results are simply yielded out as
     iterables of ChangeLogEntry objects.
@@ -90,7 +90,7 @@ class SearchChangeLog(TouchBistroDB):
             yield ChangeLogEntry.from_db_row(self._db_location, row)
 
 
-class ChangeLogEntry(TouchBistroDB):
+class ChangeLogEntry(TouchBistroDBObject):
     """This class represents a change log entry in the ZCHANGELOG table
 
     kwargs:

@@ -1,5 +1,5 @@
 """This module contains classes and functions to work with item discounts"""
-from .base import TouchBistroDB, ItemList
+from .base import TouchBistroDBObject, TouchBistroObjectList
 from .dates import cocoa_2_datetime
 from .waiter import Waiter
 
@@ -8,7 +8,7 @@ from .waiter import Waiter
 DISCOUNT_TYPES = ("Void", "Discount")
 
 
-class ItemDiscountList(ItemList):
+class ItemDiscountList(TouchBistroObjectList):
     """Use this class to get a list of ItemDiscount objects for an OrderItem.
     It behaves like a sequence, where you can simply iterate over the object,
     or call it with an index to get a particular item.
@@ -54,7 +54,7 @@ class ItemDiscountList(ItemList):
         ).fetchall()
 
 
-class ItemDiscount(TouchBistroDB):
+class ItemDiscount(TouchBistroDBObject):
     """This class represents a single discount on an OrderItem.
 
     OrderItems may have more than one discount applied.

@@ -1,7 +1,7 @@
 """This module contains classes and functions to work with TouchBistro
 payments.
 """
-from .base import TouchBistroDB, ItemList
+from .base import TouchBistroDBObject, TouchBistroObjectList
 from .dates import cocoa_2_datetime
 
 
@@ -16,7 +16,7 @@ def payment_type_name(type_id):
     return PAYMENT_TYPES[type_id]
 
 
-class PaymentGroup(ItemList):
+class PaymentGroup(TouchBistroObjectList):
     """Use this class to get a list of Payment objects for a payment group.
     It behaves like a sequence, where you can simply iterate over the object,
     or call it with an index to get a particular item.
@@ -60,7 +60,7 @@ class PaymentGroup(ItemList):
             self.QUERY, bindings).fetchall()
 
 
-class Payment(TouchBistroDB):
+class Payment(TouchBistroDBObject):
     """This class represents a single payment on an Order.
 
     Required kwargs:

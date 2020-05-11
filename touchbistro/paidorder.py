@@ -1,7 +1,7 @@
 """Module to handle queries on the ZPAIDORDER table
 """
 import logging
-from .base import TouchBistroDB
+from .base import TouchBistroDBObject
 from .dates import unixepoch_2_cocoa
 
 
@@ -18,7 +18,7 @@ ZI_TAKEOUTTYPE_MAP = {
 }
 
 
-class PaidOrders(TouchBistroDB):
+class PaidOrders(TouchBistroDBObject):
     """Obtain a paid order summary for the given date range.
 
     kwargs:

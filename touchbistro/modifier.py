@@ -1,8 +1,8 @@
 """Contain classes and functions for working with order item modifiers"""
-from .base import TouchBistroDB, ItemList
+from .base import TouchBistroDBObject, TouchBistroObjectList
 
 
-class ItemModifierList(ItemList):
+class ItemModifierList(TouchBistroObjectList):
     """Use this class to get a list of ItemModifier objects for an OrderItem.
     It behaves like a sequence, where you can simply iterate over the object,
     or call it with an index to get a particular item.
@@ -48,7 +48,7 @@ class ItemModifierList(ItemList):
         ).fetchall()
 
 
-class ItemModifier(TouchBistroDB):
+class ItemModifier(TouchBistroDBObject):
     """Class to represent an order item Modifier in TouchBistro. Corresponds
     to the ZMODIFIER table.
 

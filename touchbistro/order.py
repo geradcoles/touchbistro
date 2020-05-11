@@ -2,7 +2,7 @@
 etc.
 """
 import decimal
-from .base import TouchBistroDB, ItemList
+from .base import TouchBistroDBObject, TouchBistroObjectList
 from .dates import cocoa_2_datetime
 from .discount import ItemDiscountList
 from .modifier import ItemModifierList
@@ -23,7 +23,7 @@ ZI_TAKEOUTTYPE_MAP = {
 }
 
 
-class Order(TouchBistroDB):
+class Order(TouchBistroDBObject):
     """Get detailed information about an order.
 
     kwargs:
@@ -361,7 +361,7 @@ class Order(TouchBistroDB):
             self.QUERY, bindings).fetchone()
 
 
-class OrderItemList(ItemList):
+class OrderItemList(TouchBistroObjectList):
     """Use this class to get a list of items for an order.
     It behaves like a sequence, where you can simply iterate over the object,
     or call it with an index to get a particular item.
@@ -408,7 +408,7 @@ class OrderItemList(ItemList):
             self.QUERY, bindings).fetchall()
 
 
-class OrderItem(TouchBistroDB):
+class OrderItem(TouchBistroDBObject):
     """Get information about an individual order item.
 
     kwargs:

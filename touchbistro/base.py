@@ -5,7 +5,7 @@ import logging
 import sqlite3
 
 
-class TouchBistroDB():
+class TouchBistroDBObject():
     """
     This class provides a base object for database operations in
     TouchBistro.
@@ -67,14 +67,15 @@ class TouchBistroDB():
         return output
 
 
-class ItemList(TouchBistroDB):
-    """This class represents a list of items and provides a sequence-type
-    interface
+class TouchBistroObjectList(TouchBistroDBObject):
+    """This class represents a list of objects and provides a sequence-type
+    interface. You can iterate over this List, use index syntax obj_list[2],
+    and get a length for the item list as with a normal list.
     """
 
     def __init__(self, db_location, **kwargs):
         """Initialize the class"""
-        super(ItemList, self).__init__(db_location, **kwargs)
+        super(TouchBistroObjectList, self).__init__(db_location, **kwargs)
         self._items = None
 
     @property
