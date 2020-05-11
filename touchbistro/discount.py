@@ -34,17 +34,10 @@ class ItemDiscountList(TouchBistroObjectList):
             amount += discount.amount
         return amount
 
-    @property
-    def items(self):
-        "Returns the discounts as a list, caching db results"
-        if self._items is None:
-            self._items = list()
-            for row in self.db_results:
-                self._items.append(
-                    ItemDiscount(
-                        self._db_location,
-                        discount_uuid=row['ZUUID']))
-        return self._items
+    def _vivify_db_row(self, row):
+        return ItemDiscount(
+            self._db_location,
+            discount_uuid=row['ZUUID'])
 
 
 class ItemDiscount(TouchBistroDBObject):
@@ -58,7 +51,7 @@ class ItemDiscount(TouchBistroDBObject):
         - discount_uuid: the UUID for this discount
     """
 
-    META_ATTRIBUTES = ['discount_uuid', 'discount_id', 'datetime', 'amount',
+    META_ATTRIBUTES = ['uuid', 'discount_id', 'datetime', 'amount',
                        'discount_type', 'description', 'returns_inventory',
                        'taxable',
                        'order_item_id', 'waiter_uuid', 'authorizer_uuid']
@@ -71,10 +64,6 @@ class ItemDiscount(TouchBistroDBObject):
         """
 
     QUERY_BINDING_ATTRIBUTES = ['discount_uuid']
-
-    def __init__(self, db_location, **kwargs):
-        super(ItemDiscount, self).__init__(db_location, **kwargs)
-        self.discount_uuid = kwargs.get('discount_uuid')
 
     @property
     def discount_id(self):

@@ -12,7 +12,7 @@ class Waiter(TouchBistroDBObject):
         - waiter_uuid: Key to the ZWAITER table
     """
 
-    META_ATTRIBUTES = ['waiter_uuid', 'waiter_id', 'display_name', 'firstname',
+    META_ATTRIBUTES = ['uuid', 'waiter_id', 'display_name', 'firstname',
                        'lastname', 'email']
 
     #: Query to get details about this discount
@@ -23,10 +23,6 @@ class Waiter(TouchBistroDBObject):
         """
 
     QUERY_BINDING_ATTRIBUTES = ['waiter_uuid']
-
-    def __init__(self, db_location, **kwargs):
-        super(Waiter, self).__init__(db_location, **kwargs)
-        self.waiter_uuid = kwargs.get('waiter_uuid')
 
     @property
     def waiter_id(self):

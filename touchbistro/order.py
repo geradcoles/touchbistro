@@ -34,7 +34,7 @@ class Order(TouchBistroDBObject):
     """
 
     META_ATTRIBUTES = [
-        'order_uuid', 'order_id', 'outstanding_balance',
+        'uuid', 'order_id', 'outstanding_balance',
         'order_number', 'order_type', 'table_name',
         'bill_number', 'party_name', 'party_as_split_order',
         'custom_takeout_type', 'waiter_name', 'paid_datetime'
@@ -43,12 +43,7 @@ class Order(TouchBistroDBObject):
     #: Query to get as much information about an order as possible based on its
     #: public-facing order ID number.
     QUERY = """SELECT
-            ZORDER.Z_PK,
-            ZORDER.ZPARTY, ZORDER.ZPARTYASSPLITORDER,
-            ZORDER.ZCREATEDATE, ZORDER.ZI_SPLITBY, ZORDER.ZORDERNUMBER,
-            ZORDER.ZUUID AS Z_ORDER_UUID, ZORDER.ZLOYALTYTRANSACTIONXREFID,
-            ZORDER.ZI_EXCLUDETAX1, ZORDER.ZI_EXCLUDETAX2,
-            ZORDER.ZI_EXCLUDETAX3,
+            ZORDER.*,
             ZPAIDORDER.ZPAYDATE, ZPAIDORDER.ZI_BILLNUMBER,
             ZPAIDORDER.ZI_GRATUITYBEFORETAX, ZPAIDORDER.ZI_GRATUITY,
             ZPAIDORDER.ZI_TAX2ONTAX1,
@@ -92,15 +87,14 @@ class Order(TouchBistroDBObject):
 
     def __init__(self, db_location, **kwargs):
         super(Order, self).__init__(db_location, **kwargs)
-        self.order_number = kwargs.get('order_number')
         self._order_items = None
         self._payments = None
         self._taxes = None
 
     @property
-    def order_uuid(self):
-        "Return the UUID for this order"
-        return self.db_results['Z_ORDER_UUID']
+    def order_number(self):
+        "Return the order number for this order"
+        return self.db_results['ZORDERNUMBER']
 
     @property
     def order_id(self):
@@ -390,16 +384,13 @@ class OrderItem(TouchBistroDBObject):
     Results are a multi-column format containing details about the item.
     """
 
-    META_ATTRIBUTES = ['order_item_id', 'quantity',
+    META_ATTRIBUTES = ['uuid', 'order_item_id', 'quantity',
                        'open_price', 'waiter_name', 'was_sent', 'sent_time']
 
     QUERY = """SELECT
-            ZORDERITEM.ZMENUITEMUUID,
-            ZORDERITEM.ZI_QUANTITY, ZORDERITEM.ZI_OPENPRICE,
+            ZORDERITEM.*,
             ZWAITER.ZDISPLAYNAME AS WAITERNAME,
-            ZWAITER.ZUUID AS WAITER_UUID,
-            ZORDERITEM.ZI_COURSE AS ITEM_COURSE,
-            ZORDERITEM.ZI_SENT, ZORDERITEM.ZSENTTIME
+            ZWAITER.ZUUID AS WAITER_UUID
         FROM ZORDERITEM
         LEFT JOIN ZWAITER ON
             ZWAITER.ZUUID = ZORDERITEM.ZWAITERID
@@ -410,10 +401,14 @@ class OrderItem(TouchBistroDBObject):
 
     def __init__(self, db_location, **kwargs):
         super(OrderItem, self).__init__(db_location, **kwargs)
-        self.order_item_id = kwargs.get('order_item_id')
         self._discounts = None
         self._modifiers = None
         self._menu_item = None
+
+    @property
+    def order_item_id(self):
+        "Returns the Z_PK id number for the order item"
+        return self.db_results['Z_PK']
 
     @property
     def quantity(self):
@@ -455,7 +450,6 @@ class OrderItem(TouchBistroDBObject):
     def summary(self):
         """Returns a dictionary summary of this order item"""
         summary = super(OrderItem, self).summary()
-        summary['modifiers'] = list()
         summary['menu_item'] = self.menu_item.summary()
         summary['modifiers'] = self.modifiers.summary()
         summary['discounts'] = self.discounts.summary()

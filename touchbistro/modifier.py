@@ -64,7 +64,7 @@ class ItemModifier(TouchBistroDBObject):
 
     """
 
-    META_ATTRIBUTES = ['modifier_uuid', 'modifier_id', 'name', 'price',
+    META_ATTRIBUTES = ['uuid', 'modifier_id', 'name', 'price',
                        'is_required', 'container_order_item_id',
                        'menu_item_id',
                        'modifier_group_id', 'modifier_group_for_menu_item',
@@ -81,10 +81,6 @@ class ItemModifier(TouchBistroDBObject):
         """
 
     QUERY_BINDING_ATTRIBUTES = ['modifier_uuid']
-
-    def __init__(self, db_location, **kwargs):
-        super(ItemModifier, self).__init__(db_location, **kwargs)
-        self.modifier_uuid = kwargs.get('modifier_uuid')
 
     @property
     def modifier_id(self):
@@ -156,7 +152,7 @@ class ItemModifier(TouchBistroDBObject):
         except Exception as err:
             raise RuntimeError(
                 "Caught exception while processing modifier {}:\n{}".format(
-                    self.modifier_uuid,
+                    self.uuid,
                     err
                 )
             )

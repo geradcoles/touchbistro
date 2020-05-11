@@ -19,7 +19,7 @@ class SalesCategory(TouchBistroDBObject):
 
     #: These attributes will be part of the dictionary representation
     #: of this object, as well as the string version.
-    META_ATTRIBUTES = ['category_uuid', 'category_type_id', 'name',
+    META_ATTRIBUTES = ['uuid', 'category_type_id', 'name',
                        'created_date']
 
     #: Query to get details about this object by UUID
@@ -30,11 +30,6 @@ class SalesCategory(TouchBistroDBObject):
         """
 
     QUERY_BINDING_ATTRIBUTES = ['sales_type_uuid']
-
-    @property
-    def category_uuid(self):
-        "Returns the UUID for this category"
-        return self.db_results['ZUUID']
 
     @property
     def category_type_id(self):

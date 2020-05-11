@@ -57,7 +57,7 @@ class Payment(TouchBistroDBObject):
         - payment_uuid: the UUID for this payment
     """
 
-    META_ATTRIBUTES = ['payment_uuid', 'payment_number', 'payment_type',
+    META_ATTRIBUTES = ['uuid', 'payment_number', 'payment_type',
                        'payment_type_id',
                        'amount', 'tip', 'change', 'balance',
                        'refundable_amount', 'original_payment_uuid',
@@ -66,28 +66,12 @@ class Payment(TouchBistroDBObject):
 
     #: Query to get details about this discount
     QUERY = """SELECT
-            ZI_TYPE,
-            ZI_INDEX,
-            ZACCOUNT,
-            ZCUSTOMER,
-            ZCARDTYPE,
-            ZAUTH,
-            ZI_AMOUNT,
-            ZI_CHANGE,
-            ZTIP,
-            ZBALANCE,
-            ZCREATEDATE,
-            ZI_REFUNDABLEAMOUNT,
-            ZORIGINALPAYMENTUUID
+            *
         FROM ZPAYMENT
         WHERE ZUUID = :payment_uuid
         """
 
     QUERY_BINDING_ATTRIBUTES = ['payment_uuid']
-
-    def __init__(self, db_location, **kwargs):
-        super(Payment, self).__init__(db_location, **kwargs)
-        self.payment_uuid = kwargs.get('payment_uuid')
 
     @property
     def payment_number(self):

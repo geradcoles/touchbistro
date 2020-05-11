@@ -13,6 +13,11 @@ class TouchBistroDBObject(TouchBistroDBQueryResult):
     META_ATTRIBUTES = []
 
     @property
+    def uuid(self):
+        """All objects should have UUID associated with them from ZUUID"""
+        return self.db_results['ZUUID']
+
+    @property
     def db_results(self):
         """Return the first db result since there should always be one"""
         try:

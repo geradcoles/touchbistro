@@ -3,7 +3,7 @@ items in TouchBistro"""
 from .base import TouchBistroDBObject
 from .dates import cocoa_2_datetime
 from .changelog import ChangeLogEntry
-from .salescategory import SalesCategory
+from .salescategory import SalesCategoryByID
 
 
 class MenuChangeLogEntry(ChangeLogEntry):
@@ -18,7 +18,7 @@ class MenuChangeLogEntry(ChangeLogEntry):
 
     #: These attributes will be part of the dictionary representation
     #: of this object, as well as the string version.
-    META_ATTRIBUTES = ['changelog_uuid', 'change_id', 'timestamp',
+    META_ATTRIBUTES = ['uuid', 'change_id', 'timestamp',
                        'change_type', 'change_type_details',
                        'object_reference',
                        'object_reference_type', 'user_uuid',
@@ -46,7 +46,7 @@ class MenuItem(TouchBistroDBObject):
 
     #: These attributes will be part of the dictionary representation
     #: of this object, as well as the string version.
-    META_ATTRIBUTES = ['menuitem_uuid', 'menu_id', 'course', 'hidden', 'index',
+    META_ATTRIBUTES = ['uuid', 'menu_id', 'course', 'hidden', 'index',
                        'in_stock', 'is_archived', 'is_returnable',
                        'print_seperate_chit', 'require_manager',
                        'show_in_public_menu',
@@ -72,7 +72,6 @@ class MenuItem(TouchBistroDBObject):
 
     def __init__(self, db_location, **kwargs):
         super(MenuItem, self).__init__(db_location, **kwargs)
-        self.menuitem_uuid = kwargs.get('menuitem_uuid')
         self._menu_category = None
         self._sales_category = None
 
@@ -150,9 +149,9 @@ class MenuItem(TouchBistroDBObject):
     def sales_category(self):
         "Returns a sales category object for the menu item"
         if self._sales_category is None:
-            self._sales_category = SalesCategory(
+            self._sales_category = SalesCategoryByID(
                 self._db_location,
-                category_type_id=self.sales_category_type_id)
+                sales_type_id=self.sales_category_type_id)
         return self._sales_category
 
     @property
@@ -179,10 +178,14 @@ class MenuItem(TouchBistroDBObject):
     def menu_category(self):
         "Returns a MenuCategory object corresponding to the menu item"
         if self._menu_category is None:
-            self._menu_category = MenuCategory(
-                self._db_location,
-                category_uuid=self.menu_category_uuid,
-                category_id=self.menu_category_id)
+            if self.menu_category_uuid:
+                self._menu_category = MenuCategory(
+                    self._db_location,
+                    category_uuid=self.menu_category_uuid)
+            else:
+                self._menu_category = MenuCategoryByID(
+                    self._db_location,
+                    category_id=self.menu_category_id)
         return self._menu_category
 
     @property
@@ -292,7 +295,7 @@ class MenuCategory(TouchBistroDBObject):
 
     #: These attributes will be part of the dictionary representation
     #: of this object, as well as the string version.
-    META_ATTRIBUTES = ['category_uuid', 'category_id', 'name', 'course',
+    META_ATTRIBUTES = ['uuid', 'category_id', 'name', 'course',
                        'custom', 'index', 'sorting', 'tax1', 'tax2', 'tax3',
                        'hidden', 'show_in_public_menu',
                        'sales_category_type_id',
@@ -310,7 +313,6 @@ class MenuCategory(TouchBistroDBObject):
 
     def __init__(self, db_location, **kwargs):
         super(MenuCategory, self).__init__(db_location, **kwargs)
-        self.category_uuid = kwargs.get('category_uuid', None)
         self._sales_category = None
 
     @property
@@ -372,9 +374,9 @@ class MenuCategory(TouchBistroDBObject):
     def sales_category(self):
         "Returns a sales category object for the menu category"
         if self._sales_category is None:
-            self._sales_category = SalesCategory(
+            self._sales_category = SalesCategoryByID(
                 self._db_location,
-                category_type_id=self.sales_category_type_id)
+                sales_type_id=self.sales_category_type_id)
         return self._sales_category
 
     @property
@@ -420,7 +422,7 @@ class MenuCategory(TouchBistroDBObject):
         return self.db_results['ZNAME']
 
 
-class MenuCategoryByID(MenuItem):
+class MenuCategoryByID(MenuCategory):
     """Use this class to get a menu category starting from its Z_PK primary key
     rather than UUID.
 
@@ -437,13 +439,3 @@ class MenuCategoryByID(MenuItem):
         """
 
     QUERY_BINDING_ATTRIBUTES = ['category_id']
-
-    def __init__(self, db_location, **kwargs):
-        super(MenuCategoryByID, self).__init__(db_location, **kwargs)
-        self.category_id = kwargs.get('category_id')
-        self._sales_category = None
-
-    @property
-    def category_uuid(self):
-        "Returns the Z_PK primary key for the menu category"
-        return self.db_results['ZUUID']
