@@ -3,6 +3,9 @@ TouchBistro Sqlite3 database"""
 import logging
 import sqlite3
 
+#: Specify the Sqlite3 cache size in KiB
+SQLITE3_CACHE_SIZE = 10 * 1024
+
 
 class TouchBistroDBQueryResult():
     """This class provides a very basic wrapper around the Sqlite3 connection
@@ -51,6 +54,8 @@ class TouchBistroDBQueryResult():
             self.log.debug('getting an sqlite3 database handle')
             self.__db_handle = sqlite3.connect(self._db_location)
             self.__db_handle.row_factory = sqlite3.Row
+            self.__db_handle.cursor().execute(
+                f"PRAGMA cache_size = -{SQLITE3_CACHE_SIZE:d}")
         return self.__db_handle
 
     @property
