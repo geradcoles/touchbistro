@@ -25,12 +25,19 @@ class TouchBistroDBObject(TouchBistroDBQueryResult):
         except IndexError:
             return None
 
-    def summary(self):
-        """Returns a dictionary version of the change"""
-        output = {'meta': dict()}
+    def meta_summary(self):
+        """Returns a dictionary version of this object"""
+        output = {'ObjectType': self.__class__.__name__}
         for attr in self.META_ATTRIBUTES:
-            output['meta'][attr] = getattr(self, attr)
+            output[attr] = getattr(self, attr)
         return output
+
+    def summary(self):
+        """Returns a dictionary version of this object. Overload in children
+        to provide additional top-level keys, besides meta. Best practice is to
+        start by calling this method from the superclass to get the summary
+        dictionary, then add keys in children"""
+        return {'meta': self.meta_summary()}
 
     def __str__(self):
         "Return a string-formatted version of this object"
