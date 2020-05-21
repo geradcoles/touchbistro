@@ -37,7 +37,8 @@ class Order(TouchBistroDBObject):
         'uuid', 'order_id', 'outstanding_balance',
         'order_number', 'order_type', 'table_name',
         'bill_number', 'party_name', 'party_as_split_order',
-        'custom_takeout_type', 'waiter_name', 'paid_datetime'
+        'custom_takeout_type', 'waiter_name', 'paid_datetime',
+        'subtotal', 'taxes', 'total'
     ]
 
     #: Query to get as much information about an order as possible based on its
@@ -233,11 +234,13 @@ class Order(TouchBistroDBObject):
             )
         return self._payments
 
+    @property
     def subtotal(self):
         """Returns the total value of all order line items minus discounts plus
         modifiers. Taxes not included"""
         return self.order_items.subtotal()
 
+    @property
     def taxes(self):
         """Calculate order taxes based on order items and cache locally"""
         if self._taxes is None:
@@ -251,9 +254,10 @@ class Order(TouchBistroDBObject):
                 self._taxes = total
         return self._taxes
 
+    @property
     def total(self):
         """Calculate the total value of the order, including taxes"""
-        return self.subtotal() + self.taxes()
+        return self.subtotal + self.taxes
 
     def _calc_tax_on_order_item(self, order_item):
         """Given an OrderItem, calculate the tax on the item, in CENTS"""
@@ -294,10 +298,10 @@ class Order(TouchBistroDBObject):
         output += "\n"
         output += (
             f"-----------------------------------------------\n"
-            f"                            Subtotal:  ${self.subtotal():3.2f}\n"
-            f"                                 Tax:  ${self.taxes():3.2f}\n"
+            f"                            Subtotal:  ${self.subtotal:3.2f}\n"
+            f"                                 Tax:  ${self.taxes:3.2f}\n"
             f"-----------------------------------------------\n"
-            f"                               TOTAL:  ${self.total():3.2f}\n"
+            f"                               TOTAL:  ${self.total:3.2f}\n"
         )
         for payment in self.payments:
             output += payment.receipt_form()
