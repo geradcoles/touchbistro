@@ -2,6 +2,7 @@
 etc.
 """
 import decimal
+import sqlite3
 from .base import TouchBistroDBObject, TouchBistroObjectList
 from .dates import cocoa_2_datetime
 from .discount import ItemDiscountList
@@ -351,15 +352,21 @@ class OrderItemList(TouchBistroObjectList):
     kwargs:
         - order_id
     """
+    #: The ORDERITEMS table has a version number that changes with each
+    #: release. Unfortunately the version also changes column names while the
+    #: structure seems to stay identical.
+    BASE_ID = 54
+    #: Number of incremental attempts to get data out of this table.
+    ATTEMPTS = 20
 
     #: This query results in a list of order item ID numbers (foreign key into
     #: the ZORDERITEM table)
     QUERY = """SELECT
-            Z_52I_ORDERITEMS.Z_53I_ORDERITEMS AS ORDERITEM_ID
-        FROM Z_52I_ORDERITEMS
+            Z_{tbl_id}I_ORDERITEMS.Z_{col_id}I_ORDERITEMS AS ORDERITEM_ID
+        FROM Z_{tbl_id}I_ORDERITEMS
         LEFT JOIN ZORDERITEM ON
-            ZORDERITEM.Z_PK = Z_52I_ORDERITEMS.Z_53I_ORDERITEMS
-        WHERE Z_52I_ORDERITEMS.Z_52I_ORDERS = :order_id
+            ZORDERITEM.Z_PK = Z_{tbl_id}I_ORDERITEMS.Z_{col_id}I_ORDERITEMS
+        WHERE Z_{tbl_id}I_ORDERITEMS.Z_{tbl_id}I_ORDERS = :order_id
         ORDER BY ZORDERITEM.ZI_INDEX ASC
     """
 
@@ -376,6 +383,21 @@ class OrderItemList(TouchBistroObjectList):
         "Convert a DB row into an OrderItem"
         return OrderItem(
             self._db_location, order_item_id=row['ORDERITEM_ID'])
+
+    def _fetch_from_db(self):
+        """Returns the db result rows for the QUERY"""
+        last_err = None
+        for offset in range(self.ATTEMPTS):
+            try:
+                tbl_id = self.BASE_ID + offset
+                col_id = tbl_id + 1
+                return self.db_handle.cursor().execute(
+                    self.QUERY.format(
+                        tbl_id=tbl_id, col_id=col_id), self.bindings
+                ).fetchall()
+            except sqlite3.OperationalError as err:
+                last_err = err
+        raise last_err
 
 
 class OrderItem(TouchBistroDBObject):
