@@ -8,14 +8,25 @@ Options:
 
  -d, --debug    Print detailed debug logging
  -j, --json     Output a JSON summary for the order
+ -c, --csv      Output as CSV
+ -f, --file=F   Specify an output file instead of stdout
 
 """
-
+import os
 import sys
 import logging
 import json
+import csv
 from docopt import docopt
 from touchbistro.order import Order
+from touchbistro.reports import explode_order, explode_order_fields
+
+
+def write_to_csv(handle, order):
+    writer = csv.DictWriter(handle, fieldnames=explode_order_fields())
+    writer.writeheader()
+    for row in explode_order(order):
+        writer.writerow(row)
 
 
 if __name__ == '__main__':
@@ -31,9 +42,24 @@ if __name__ == '__main__':
         order_number=int(ARGS.get('<order_number>'))
     )
 
-    if ARGS.get('--json'):
-        print(json.dumps(
-            ORDER.summary(), indent=4, sort_keys=True, default=str))
+    if ARGS.get('--file'):
+        with open(
+                os.path.expanduser(ARGS.get('--file')), 'w',
+                encoding='utf-8') as outfile:
+            if ARGS.get('--csv'):
+                write_to_csv(outfile, ORDER)
+            elif ARGS.get('--json'):
+                json.dump(
+                    ORDER.summary(), outfile, indent=4,
+                    sort_keys=True, default=str)
+            else:
+                outfile.writelines(ORDER.receipt_form())
     else:
-        print(ORDER.receipt_form())
+        if ARGS.get('--csv'):
+            write_to_csv(sys.stdout, ORDER)
+        elif ARGS.get('--json'):
+            print(json.dumps(
+                ORDER.summary(), indent=4, sort_keys=True, default=str))
+        else:
+            print(ORDER.receipt_form())
     sys.exit(0)
