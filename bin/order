@@ -23,7 +23,8 @@ from touchbistro.reports import explode_order, explode_order_fields
 
 
 def write_to_csv(handle, order):
-    writer = csv.DictWriter(handle, fieldnames=explode_order_fields())
+    writer = csv.DictWriter(
+        handle, dialect='excel', fieldnames=explode_order_fields())
     writer.writeheader()
     for row in explode_order(order):
         writer.writerow(row)
