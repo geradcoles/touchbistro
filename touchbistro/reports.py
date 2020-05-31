@@ -10,7 +10,59 @@ REPORTED_OBJECTS = (
     Order, OrderItem, ItemDiscount, ItemModifier, Payment
 )
 
-ORDER_BASIC_FIELDS = ['order_number', 'bill_number']
+#: These fields from a top-level Order object will always be output
+ORDER_BASIC_FIELDS = ['bill_number', 'order_number', 'order_type']
+
+#: Define the attributes to include in order reports
+ORDER_REPORT_FIELDS = {
+    Order: (
+        'table_name',
+        'party_name',
+        'custom_takeout_type',
+        'waiter_name',
+        'datetime',
+        'subtotal',
+        'taxes',
+        'total',
+    ),
+    OrderItem: (
+        'datetime',
+        'quantity',
+        'name',
+        'sales_category',
+        'price',
+        'waiter_name',
+        'was_sent'
+    ),
+    ItemDiscount: (
+        'datetime',
+        'waiter_name',
+        'name',
+        'price',
+        'authorizer_name',
+        'discount_type',
+    ),
+    ItemModifier: (
+        'name',
+        'datetime',
+        'price',
+        'sales_category',
+        'waiter_name'
+    ),
+    Payment: (
+        'datetime',
+        'payment_number',
+        'payment_type',
+        'amount',
+        'tip',
+        'change',
+        'balance',
+        'customer_account_id',
+        'customer_id',
+        'card_type',
+        'auth_number'
+    )
+}
 
 
 def explode_order_fields():
@@ -20,6 +72,15 @@ def explode_order_fields():
         for field in obj.meta_keys():
             fields.add(field)
     return fields
+
+
+def get_obj_fields(obj):
+    """Given a supported reporting object type, get relevant fields and return
+    as a dictionary of field-value pairs"""
+    output = dict()
+    for key in ORDER_REPORT_FIELDS[obj.__class__]:
+        output[key] = getattr(obj, key)
+    return output
 
 
 def explode_order(order):
@@ -40,18 +101,18 @@ def explode_order(order):
     it may be confusing because every object also has 'uuid' in its list of
     META_ATTRIBUTES, which will overwrite the order's uuid for that row.
     """
-    yield order.meta_summary()
     order_basics = dict()
     for field in ORDER_BASIC_FIELDS:
         order_basics[field] = getattr(order, field)
+    yield {**order_basics, **get_obj_fields(order)}
     for item in order.order_items:
-        yield {**order_basics, **item.meta_summary()}
+        yield {**order_basics, **get_obj_fields(item)}
         for modifier in item.modifiers:
-            yield {**order_basics, **modifier.meta_summary()}
+            yield {**order_basics, **get_obj_fields(modifier)}
         for discount in item.discounts:
-            yield {**order_basics, **discount.meta_summary()}
+            yield {**order_basics, **get_obj_fields(discount)}
     for payment in order.payments:
-        yield {**order_basics, **payment.meta_summary()}
+        yield {**order_basics, **get_obj_fields(payment)}
 
 
 class SalesReport():

@@ -276,7 +276,7 @@ class Order(TouchBistroDBObject):
     def receipt_form(self):
         """Prints the order in a receipt-like format"""
         try:
-            datetime = self.paid_datetime.strftime('%Y-%m-%d %I:%M:%S %p')
+            datetime = self.datetime.strftime('%Y-%m-%d %I:%M:%S %p')
         except AttributeError:
             datetime = "None"
         output = (
@@ -405,8 +405,8 @@ class OrderItem(TouchBistroDBObject):
     Results are a multi-column format containing details about the item.
     """
 
-    META_ATTRIBUTES = ['quantity', 'name', 'sales_category',
-                       'open_price', 'waiter_name', 'was_sent', 'datetime']
+    META_ATTRIBUTES = ['quantity', 'name', 'sales_category', 'price',
+                       'waiter_name', 'was_sent', 'datetime']
 
     QUERY = """SELECT
             ZORDERITEM.*,
@@ -501,7 +501,7 @@ class OrderItem(TouchBistroDBObject):
             name += f"{self.quantity} x "
         name += self.menu_item.name
         output += "{:38s} ${:3.2f}\n".format(
-            name, self.base_price())
+            name, self.price)
         has_price_mod = False
         for modifier in self.modifiers:
             output += "  " + modifier.receipt_form()
@@ -522,7 +522,8 @@ class OrderItem(TouchBistroDBObject):
             return True
         return False
 
-    def base_price(self):
+    @property
+    def price(self):
         """Return the price of this line item before applying discounts and
         modifiers, taking into account quantity"""
         price = self.menu_item.price
@@ -538,8 +539,8 @@ class OrderItem(TouchBistroDBObject):
             - Adding any modifier pricing
 
         Tax is not included by default"""
-        amount = self.base_price()
-        amount -= self.discounts.total()
+        amount = self.price
+        amount += self.discounts.total()
         amount += self.modifiers.total()
         return amount
 

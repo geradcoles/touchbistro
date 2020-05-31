@@ -70,9 +70,9 @@ class ItemModifier(TouchBistroDBObject):
                        'is_required', 'container_order_item_id',
                        'menu_item_id', 'sales_category',
                        'modifier_group_id', 'modifier_group_for_menu_item',
-                       'order_item', 'datetime']
+                       'order_item', 'datetime', 'waiter_name']
 
-    #: Query to get details about this discount
+    #: Query to get details about this modifier
     QUERY = """SELECT
         ZMODIFIER.*,
         ZMENUITEM.ZNAME AS MENU_ITEM_NAME,
@@ -106,6 +106,12 @@ class ItemModifier(TouchBistroDBObject):
     def menu_item_uuid(self):
         "Returns the UUID of an associate menu item, if applicable"
         return self.db_results['MENU_ITEM_UUID']
+
+    @property
+    def waiter_name(self):
+        """Tries to return a waiter name for this modifier, using the parent
+        item's waiter name"""
+        return self.parent.waiter_name
 
     @property
     def menu_item(self):

@@ -31,7 +31,7 @@ class ItemDiscountList(TouchBistroObjectList):
         "Returns the total value of all discounts in the list"
         amount = 0.0
         for discount in self.items:
-            amount += discount.amount
+            amount += discount.price
         return amount
 
     def _vivify_db_row(self, row):
@@ -52,8 +52,8 @@ class ItemDiscount(TouchBistroDBObject):
         - discount_uuid: the UUID for this discount
     """
 
-    META_ATTRIBUTES = ['datetime', 'amount',
-                       'discount_type', 'description', 'returns_inventory',
+    META_ATTRIBUTES = ['datetime', 'amount', 'waiter_name', 'authorizer_name',
+                       'discount_type', 'name', 'returns_inventory',
                        'taxable',
                        'order_item_id', 'waiter_uuid', 'authorizer_uuid']
 
@@ -66,13 +66,18 @@ class ItemDiscount(TouchBistroDBObject):
 
     QUERY_BINDING_ATTRIBUTES = ['discount_uuid']
 
+    def __init__(self, db_location, **kwargs):
+        super(ItemDiscount, self).__init__(db_location, **kwargs)
+        self._waiter = None
+        self._authorizer = None
+
     @property
     def discount_type(self):
         "Map to the ZI_TYPE colum for the discount"
         return DISCOUNT_TYPES[self.db_results['ZI_TYPE']]
 
     @property
-    def description(self):
+    def name(self):
         "Returns the human-readable description for the discount"
         return self.db_results['ZDISCOUNTDESCRIPTION']
 
@@ -101,6 +106,11 @@ class ItemDiscount(TouchBistroDBObject):
         return self.db_results['ZI_AMOUNT']
 
     @property
+    def price(self):
+        "Same as amount, but with correct sign"
+        return - self.amount
+
+    @property
     def datetime(self):
         "Returns the Datetime associated with the discount"
         return cocoa_2_datetime(self.db_results['ZVOIDDATE'])
@@ -115,16 +125,38 @@ class ItemDiscount(TouchBistroDBObject):
         "Returns the UUID for the Waiter who authorized the discount"
         return self.db_results['ZMANAGERUUID']
 
-    def get_waiter(self):
+    @property
+    def waiter(self):
         "Returns a Waiter object for the person who initiated the discount"
-        return Waiter(self._db_location, waiter_uuid=self.waiter_uuid)
+        if self._waiter is None:
+            self._waiter = Waiter(
+                self._db_location,
+                waiter_uuid=self.waiter_uuid,
+                parent=self)
+        return self._waiter
 
-    def get_authorizer(self):
+    @property
+    def authorizer(self):
         "Returns a Waiter object for the person that authorized the discount"
-        return Waiter(self._db_location, waiter_uuid=self.authorizer_uuid)
+        if self._authorizer is None:
+            self._authorizer = Waiter(
+                self._db_location,
+                waiter_uuid=self.authorizer_uuid,
+                parent=self)
+        return self._authorizer
+
+    @property
+    def waiter_name(self):
+        "Returns the name of the waiter that requested the discount"
+        return self.waiter.display_name
+
+    @property
+    def authorizer_name(self):
+        "Returns the name of the waiter that authorized the discount"
+        return self.authorizer.display_name
 
     def receipt_form(self):
         """Print the discount in a format suitable for receipts"""
         return (
-            f"- ${self.amount:.2f}: {self.description} "
+            f"- ${self.amount:.2f}: {self.name} "
             f"{self.discount_type}\n")
