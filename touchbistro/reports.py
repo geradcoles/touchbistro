@@ -1,6 +1,25 @@
 """This module contains methods for performing reports against the database.
 """
-ORDER_BASIC_FIELDS = ['order_id', 'order_number', 'bill_number']
+from .order import Order, OrderItem
+from .discount import ItemDiscount
+from .modifier import ItemModifier
+from .payment import Payment
+
+
+REPORTED_OBJECTS = (
+    Order, OrderItem, ItemDiscount, ItemModifier, Payment
+)
+
+ORDER_BASIC_FIELDS = ['order_number', 'bill_number']
+
+
+def explode_order_fields():
+    "Returns a list of fields reported by explode_order"
+    fields = set()
+    for obj in REPORTED_OBJECTS:
+        for field in obj.meta_keys():
+            fields.add(field)
+    return fields
 
 
 def explode_order(order):

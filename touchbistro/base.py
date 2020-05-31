@@ -10,12 +10,34 @@ class TouchBistroDBObject(TouchBistroDBQueryResult):
     TouchBistro.
     """
 
+    #: This list provides a set of attributes that best represent this object.
+    #: Overload it in child classes for the various object types.
     META_ATTRIBUTES = []
+
+    #: This list provides a set of attributes that are common to all
+    #: descendants of this base class. Do not overload, use META_ATTRIBUTES
+    _BASE_ATTRIBUTES = ['object_type', 'uuid', 'object_id']
 
     @property
     def uuid(self):
         """All objects should have UUID associated with them from ZUUID"""
-        return self.db_results['ZUUID']
+        try:
+            return self.db_results['ZUUID']
+        except KeyError:
+            return None
+
+    @property
+    def object_id(self):
+        "Returns the Z_PK primary key for this item"
+        try:
+            return self.db_results['Z_PK']
+        except KeyError:
+            return None
+
+    @property
+    def parent(self):
+        "If a parent object was linked with the 'parent' kwarg, return it here"
+        return self.kwargs.get('parent', None)
 
     @property
     def db_results(self):
@@ -25,10 +47,24 @@ class TouchBistroDBObject(TouchBistroDBQueryResult):
         except IndexError:
             return None
 
+    @property
+    def object_type(self):
+        "Returns the name of this object's class"
+        return self.__class__.__name__
+
+    @classmethod
+    def meta_keys(cls):
+        """This method provides a full list of meta-attributes associated with
+        this object type, including built-ins like 'object_type' that may not
+        be populated in :attr:`META_ATTRIBUTES`. As a class method, it can be
+        called for a non-instantiated object.
+        """
+        return cls._BASE_ATTRIBUTES + cls.META_ATTRIBUTES
+
     def meta_summary(self):
         """Returns a dictionary version of this object"""
-        output = {'ObjectType': self.__class__.__name__}
-        for attr in self.META_ATTRIBUTES:
+        output = dict()
+        for attr in self.__class__.meta_keys():
             output[attr] = getattr(self, attr)
         return output
 
@@ -59,6 +95,11 @@ class TouchBistroObjectList(TouchBistroDBQueryResult):
         """Initialize the class"""
         super(TouchBistroObjectList, self).__init__(db_location, **kwargs)
         self._items = None
+
+    @property
+    def parent(self):
+        "If a parent object was linked with the 'parent' kwarg, return it here"
+        return self.kwargs.get('parent', None)
 
     @property
     def items(self):

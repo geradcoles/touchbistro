@@ -19,7 +19,7 @@ class SalesCategory(TouchBistroDBObject):
 
     #: These attributes will be part of the dictionary representation
     #: of this object, as well as the string version.
-    META_ATTRIBUTES = ['uuid', 'category_type_id', 'name',
+    META_ATTRIBUTES = ['category_type_id', 'name',
                        'created_date']
 
     #: Query to get details about this object by UUID

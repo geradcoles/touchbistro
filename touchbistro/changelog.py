@@ -103,7 +103,7 @@ class ChangeLogEntry(TouchBistroDBObject):
 
     #: These attributes will be part of the dictionary representation
     #: of this object, as well as the string version.
-    META_ATTRIBUTES = ['uuid', 'change_id', 'timestamp',
+    META_ATTRIBUTES = ['datetime',
                        'change_type', 'change_type_details',
                        'object_reference',
                        'object_reference_type', 'user_uuid',
@@ -119,13 +119,7 @@ class ChangeLogEntry(TouchBistroDBObject):
     QUERY_BINDING_ATTRIBUTES = ["changelog_uuid"]
 
     @property
-    def change_id(self):
-        """Returns a Z_PK integer change id for the change, but uuid
-        is best"""
-        return self._db_results['Z_PK']
-
-    @property
-    def timestamp(self):
+    def datetime(self):
         "Returns a datetime corresponding to the time of the change"
         return cocoa_2_datetime(self._db_results['ZTIMESTAMP'])
 

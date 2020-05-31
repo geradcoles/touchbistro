@@ -45,7 +45,8 @@ class PaymentGroup(TouchBistroObjectList):
     def _vivify_db_row(self, row):
         return Payment(
             self._db_location,
-            payment_uuid=row['ZUUID'])
+            payment_uuid=row['ZUUID'],
+            parent=self.parent)
 
 
 class Payment(TouchBistroDBObject):
@@ -57,12 +58,12 @@ class Payment(TouchBistroDBObject):
         - payment_uuid: the UUID for this payment
     """
 
-    META_ATTRIBUTES = ['uuid', 'payment_number', 'payment_type',
+    META_ATTRIBUTES = ['payment_number', 'payment_type',
                        'payment_type_id',
                        'amount', 'tip', 'change', 'balance',
                        'refundable_amount', 'original_payment_uuid',
                        'customer_account_id', 'customer_id',
-                       'card_type', 'auth_number', 'create_date']
+                       'card_type', 'auth_number', 'datetime']
 
     #: Query to get details about this discount
     QUERY = """SELECT
@@ -162,7 +163,7 @@ class Payment(TouchBistroDBObject):
         return self.db_results['ZAUTH']
 
     @property
-    def create_date(self):
+    def datetime(self):
         """Returns a Python Datetime object with local timezone corresponding
         to the time that the payment occurred"""
         try:

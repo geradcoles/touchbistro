@@ -37,7 +37,8 @@ class ItemDiscountList(TouchBistroObjectList):
     def _vivify_db_row(self, row):
         return ItemDiscount(
             self._db_location,
-            discount_uuid=row['ZUUID'])
+            discount_uuid=row['ZUUID'],
+            parent=self.parent)
 
 
 class ItemDiscount(TouchBistroDBObject):
@@ -51,7 +52,7 @@ class ItemDiscount(TouchBistroDBObject):
         - discount_uuid: the UUID for this discount
     """
 
-    META_ATTRIBUTES = ['uuid', 'discount_id', 'datetime', 'amount',
+    META_ATTRIBUTES = ['datetime', 'amount',
                        'discount_type', 'description', 'returns_inventory',
                        'taxable',
                        'order_item_id', 'waiter_uuid', 'authorizer_uuid']
@@ -64,11 +65,6 @@ class ItemDiscount(TouchBistroDBObject):
         """
 
     QUERY_BINDING_ATTRIBUTES = ['discount_uuid']
-
-    @property
-    def discount_id(self):
-        "Returns the Z_PK ID for this discount (ZUUID better for fetch)"
-        return self.db_results['Z_PK']
 
     @property
     def discount_type(self):

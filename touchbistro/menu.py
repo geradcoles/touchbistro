@@ -18,7 +18,7 @@ class MenuChangeLogEntry(ChangeLogEntry):
 
     #: These attributes will be part of the dictionary representation
     #: of this object, as well as the string version.
-    META_ATTRIBUTES = ['uuid', 'change_id', 'timestamp',
+    META_ATTRIBUTES = ['timestamp',
                        'change_type', 'change_type_details',
                        'object_reference',
                        'object_reference_type', 'user_uuid',
@@ -46,7 +46,7 @@ class MenuItem(TouchBistroDBObject):
 
     #: These attributes will be part of the dictionary representation
     #: of this object, as well as the string version.
-    META_ATTRIBUTES = ['uuid', 'menu_id', 'course', 'hidden', 'index',
+    META_ATTRIBUTES = ['course', 'hidden', 'index',
                        'in_stock', 'is_archived', 'is_returnable',
                        'print_seperate_chit', 'require_manager',
                        'show_in_public_menu',
@@ -74,11 +74,6 @@ class MenuItem(TouchBistroDBObject):
         super(MenuItem, self).__init__(db_location, **kwargs)
         self._menu_category = None
         self._sales_category = None
-
-    @property
-    def menu_id(self):
-        "Returns the Z_PK primary key for the menu item"
-        return self.db_results['Z_PK']
 
     @property
     def course(self):
@@ -285,6 +280,23 @@ class MenuItem(TouchBistroDBObject):
         return output
 
 
+class MenuItemByID(MenuItem):
+    """Works the same as :class:`MenuItem`, but populate based on item ID
+    instead of UUID.
+
+    Use the menuitem_id kwarg to specify the ID number.
+    """
+
+    #: Query to get details about this discount
+    QUERY = """SELECT
+            *
+        FROM ZMENUITEM
+        WHERE Z_PK = :menuitem_id
+        """
+
+    QUERY_BINDING_ATTRIBUTES = ['menuitem_id']
+
+
 class MenuCategory(TouchBistroDBObject):
     """This class represents a menu category from the ZMENUCATEGORY table
 
@@ -295,7 +307,7 @@ class MenuCategory(TouchBistroDBObject):
 
     #: These attributes will be part of the dictionary representation
     #: of this object, as well as the string version.
-    META_ATTRIBUTES = ['uuid', 'category_id', 'name', 'course',
+    META_ATTRIBUTES = ['name', 'course',
                        'custom', 'index', 'sorting', 'tax1', 'tax2', 'tax3',
                        'hidden', 'show_in_public_menu',
                        'sales_category_type_id',
@@ -314,11 +326,6 @@ class MenuCategory(TouchBistroDBObject):
     def __init__(self, db_location, **kwargs):
         super(MenuCategory, self).__init__(db_location, **kwargs)
         self._sales_category = None
-
-    @property
-    def category_id(self):
-        "Returns the Z_PK primary key for the menu category"
-        return self.db_results['Z_PK']
 
     @property
     def course(self):

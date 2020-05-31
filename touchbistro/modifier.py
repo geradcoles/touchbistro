@@ -1,5 +1,6 @@
 """Contain classes and functions for working with order item modifiers"""
 from .base import TouchBistroDBObject, TouchBistroObjectList
+from .menu import MenuItem
 
 
 class ItemModifierList(TouchBistroObjectList):
@@ -31,7 +32,8 @@ class ItemModifierList(TouchBistroObjectList):
     def _vivify_db_row(self, row):
         "Convert a db row to an ItemModifier"
         return ItemModifier(
-            self._db_location, modifier_uuid=row['ZUUID'])
+            self._db_location, modifier_uuid=row['ZUUID'],
+            parent=self.parent)
 
 
 class ItemModifier(TouchBistroDBObject):
@@ -64,16 +66,17 @@ class ItemModifier(TouchBistroDBObject):
 
     """
 
-    META_ATTRIBUTES = ['uuid', 'modifier_id', 'name', 'price',
+    META_ATTRIBUTES = ['name', 'price',
                        'is_required', 'container_order_item_id',
-                       'menu_item_id',
+                       'menu_item_id', 'sales_category',
                        'modifier_group_id', 'modifier_group_for_menu_item',
-                       'order_item', 'creation_date']
+                       'order_item', 'datetime']
 
     #: Query to get details about this discount
     QUERY = """SELECT
         ZMODIFIER.*,
-        ZMENUITEM.ZNAME AS MENU_ITEM_NAME
+        ZMENUITEM.ZNAME AS MENU_ITEM_NAME,
+        ZMENUITEM.ZUUID AS MENU_ITEM_UUID
         FROM ZMODIFIER
         LEFT JOIN ZMENUITEM ON
             ZMENUITEM.Z_PK = ZMODIFIER.ZMENUITEM
@@ -81,11 +84,6 @@ class ItemModifier(TouchBistroDBObject):
         """
 
     QUERY_BINDING_ATTRIBUTES = ['modifier_uuid']
-
-    @property
-    def modifier_id(self):
-        "Returns the Z_PK version of the modifier ID (UUID is better)"
-        return self.db_results['Z_PK']
 
     @property
     def is_required(self):
@@ -103,6 +101,35 @@ class ItemModifier(TouchBistroDBObject):
     def menu_item_id(self):
         "Returns the simple Z_PK version of the menu item ID for this modifier"
         return self.db_results['ZMENUITEM']
+
+    @property
+    def menu_item_uuid(self):
+        "Returns the UUID of an associate menu item, if applicable"
+        return self.db_results['MENU_ITEM_UUID']
+
+    @property
+    def menu_item(self):
+        """Return a MenuItem object representing the associated menu item, or
+        None"""
+        if self.menu_item_uuid:
+            return MenuItem(
+                db_location=self._db_location,
+                menuitem_uuid=self.menu_item_uuid,
+                parent=self)
+        return None
+
+    @property
+    def sales_category(self):
+        """If this is a menu-based modifier, returns the sales category name
+        for the menu item tied to the modifier. If not a menu-based modifier,
+        tries to return the sales category name from the parent, if provided,
+        otherwise 'None'"""
+        if self.menu_item_uuid:
+            return self.menu_item.sales_category.name
+        try:
+            return self.parent.sales_category
+        except AttributeError:
+            return None
 
     @property
     def modifier_group_id(self):
@@ -124,10 +151,15 @@ class ItemModifier(TouchBistroDBObject):
         return self.db_results['ZORDERITEM']
 
     @property
-    def creation_date(self):
+    def datetime(self):
         """Returns a datetime object (in local timezone) corresponding to the
         time that the modifier was created. Does not appear to be used."""
-        return self.db_results['ZCREATEDATE']
+        if self.db_results['ZCREATEDATE']:
+            return self.db_results['ZCREATEDATE']
+        try:
+            return self.parent.datetime
+        except AttributeError:
+            return None
 
     @property
     def price(self):

@@ -35,10 +35,10 @@ class Order(TouchBistroDBObject):
     """
 
     META_ATTRIBUTES = [
-        'uuid', 'order_id', 'outstanding_balance',
+        'outstanding_balance',
         'order_number', 'order_type', 'table_name',
         'bill_number', 'party_name', 'party_as_split_order',
-        'custom_takeout_type', 'waiter_name', 'paid_datetime',
+        'custom_takeout_type', 'waiter_name', 'datetime',
         'subtotal', 'taxes', 'total'
     ]
 
@@ -99,11 +99,6 @@ class Order(TouchBistroDBObject):
         return self.db_results['ZORDERNUMBER']
 
     @property
-    def order_id(self):
-        "Returns the Z_PK ID for this order (not the customer-facing number)"
-        return self.db_results['Z_PK']
-
-    @property
     def bill_number(self):
         "Return the bill number for this order"
         try:
@@ -133,7 +128,7 @@ class Order(TouchBistroDBObject):
             return None
 
     @property
-    def paid_datetime(self):
+    def datetime(self):
         """Returns a Python Datetime object with local timezone corresponding
         to the time that the order was paid"""
         try:
@@ -221,7 +216,7 @@ class Order(TouchBistroDBObject):
         if self._order_items is None:
             self._order_items = OrderItemList(
                 self._db_location,
-                order_id=self.order_id
+                order_id=self.object_id
             )
         return self._order_items
 
@@ -410,8 +405,8 @@ class OrderItem(TouchBistroDBObject):
     Results are a multi-column format containing details about the item.
     """
 
-    META_ATTRIBUTES = ['uuid', 'order_item_id', 'quantity',
-                       'open_price', 'waiter_name', 'was_sent', 'sent_time']
+    META_ATTRIBUTES = ['quantity', 'name', 'sales_category',
+                       'open_price', 'waiter_name', 'was_sent', 'datetime']
 
     QUERY = """SELECT
             ZORDERITEM.*,
@@ -430,11 +425,6 @@ class OrderItem(TouchBistroDBObject):
         self._discounts = None
         self._modifiers = None
         self._menu_item = None
-
-    @property
-    def order_item_id(self):
-        "Returns the Z_PK id number for the order item"
-        return self.db_results['Z_PK']
 
     @property
     def quantity(self):
@@ -457,6 +447,11 @@ class OrderItem(TouchBistroDBObject):
         return self.db_results['ITEM_COURSE']
 
     @property
+    def datetime(self):
+        """Alias for :meth:`sent_time`"""
+        return self.sent_time
+
+    @property
     def sent_time(self):
         """Returns a Python Datetime object with local timezone corresponding
         to the time that the item was sent to the kitchen/bar (or None)"""
@@ -470,8 +465,19 @@ class OrderItem(TouchBistroDBObject):
         if self._menu_item is None:
             self._menu_item = MenuItem(
                 self._db_location,
-                menuitem_uuid=self.db_results['ZMENUITEMUUID'])
+                menuitem_uuid=self.db_results['ZMENUITEMUUID'],
+                parent=self)
         return self._menu_item
+
+    @property
+    def name(self):
+        """Returns the name of the menu item associated with the line item"""
+        return self.menu_item.name
+
+    @property
+    def sales_category(self):
+        """Returns the sales category associated with this order's menu item"""
+        return self.menu_item.sales_category.name
 
     def summary(self):
         """Returns a dictionary summary of this order item"""
@@ -543,7 +549,9 @@ class OrderItem(TouchBistroDBObject):
         if self._discounts is None:
             self._discounts = ItemDiscountList(
                 self._db_location,
-                order_item_id=self.order_item_id)
+                order_item_id=self.object_id,
+                parent=self
+            )
         return self._discounts
 
     @property
@@ -552,6 +560,7 @@ class OrderItem(TouchBistroDBObject):
         if self._modifiers is None:
             self._modifiers = ItemModifierList(
                 self._db_location,
-                order_item_id=self.order_item_id
+                order_item_id=self.object_id,
+                parent=self
             )
         return self._modifiers
