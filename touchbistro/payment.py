@@ -169,7 +169,10 @@ class Payment(TouchBistroDBObject):
         try:
             return cocoa_2_datetime(self.db_results['ZCREATEDATE'])
         except TypeError:
-            return None
+            try:
+                return self.parent.datetime
+            except AttributeError:
+                return None
 
     def receipt_form(self):
         """Output payment info in a form suitable for receipts"""

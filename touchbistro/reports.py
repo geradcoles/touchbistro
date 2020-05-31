@@ -24,6 +24,7 @@ ORDER_REPORT_FIELDS = {
         'subtotal',
         'taxes',
         'total',
+        'object_type',
     ),
     OrderItem: (
         'datetime',
@@ -32,7 +33,8 @@ ORDER_REPORT_FIELDS = {
         'sales_category',
         'price',
         'waiter_name',
-        'was_sent'
+        'was_sent',
+        'object_type',
     ),
     ItemDiscount: (
         'datetime',
@@ -41,37 +43,45 @@ ORDER_REPORT_FIELDS = {
         'price',
         'authorizer_name',
         'discount_type',
+        'object_type',
     ),
     ItemModifier: (
         'name',
         'datetime',
         'price',
         'sales_category',
-        'waiter_name'
+        'waiter_name',
+        'object_type',
     ),
     Payment: (
         'datetime',
         'payment_number',
         'payment_type',
-        'amount',
         'tip',
+        'amount',
         'change',
         'balance',
         'customer_account_id',
         'customer_id',
         'card_type',
-        'auth_number'
+        'auth_number',
+        'object_type',
     )
 }
 
 
 def explode_order_fields():
     "Returns a list of fields reported by explode_order"
-    fields = set()
-    for obj in REPORTED_OBJECTS:
-        for field in obj.meta_keys():
-            fields.add(field)
-    return fields
+    return (
+        'bill_number', 'order_number', 'datetime', 'order_type', 'object_type',
+        'custom_takeout_type', 'discount_type',
+        'waiter_name', 'name', 'sales_category', 'quantity', 'price',
+        'subtotal', 'taxes', 'total', 'tip', 'amount', 'change', 'balance',
+        'payment_type', 'payment_number', 'party_name',
+        'customer_account_id',
+        'was_sent', 'authorizer_name', 'card_type',
+        'auth_number',  'table_name',
+        'customer_id')
 
 
 def get_obj_fields(obj):

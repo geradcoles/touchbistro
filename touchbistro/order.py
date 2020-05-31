@@ -226,7 +226,8 @@ class Order(TouchBistroDBObject):
         if self._payments is None:
             self._payments = PaymentGroup(
                 self._db_location,
-                payment_group_id=self.payment_group_id
+                payment_group_id=self.payment_group_id,
+                parent=self
             )
         return self._payments
 
