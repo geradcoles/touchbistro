@@ -1,6 +1,5 @@
 """Common functions and definitions for date handling"""
 from datetime import datetime
-from lib7shifts.dates import get_local_tz
 
 #: The amount of seconds to ADD to a Cocoa timestamp to arrive at Unix Epoch
 UNIX_COCOA_OFFSET = 978307200.0
@@ -26,3 +25,8 @@ def cocoa_2_datetime(cocoatime):
 def datetime_2_cocoa(datetime_obj):
     "Returns a cocoa epoch timestamp from a datetime object"
     return unixepoch_2_cocoa(datetime_obj.timestamp())
+
+
+def get_local_tz():
+    "Return the current local timezone"
+    return datetime.utcnow().astimezone().tzinfo
