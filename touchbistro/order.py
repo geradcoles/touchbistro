@@ -2,9 +2,10 @@
 etc.
 """
 import decimal
+from datetime import timedelta
 import sqlite3
 from .base import TouchBistroDBObject, TouchBistroObjectList
-from .dates import cocoa_2_datetime
+from .dates import cocoa_2_datetime, datetime_2_cocoa, to_local_datetime
 from .discount import ItemDiscountList
 from .modifier import ItemModifierList
 from .payment import PaymentGroup
@@ -22,6 +23,62 @@ ZI_TAKEOUTTYPE_MAP = {
     1: 'delivery',
     2: 'bartab'
 }
+
+
+def get_orders_for_date_range(
+        db_location, earliest_date, latest_date, day_boundary='02:00:00'):
+    """Given an earliest and a latest date, return an OrderTimeRange object
+    containing all the orders for that date period. latest_date is inclusive,
+    so if you specify 2020-05-31 as the latest_date, all orders from that day
+    will be included in the results.
+
+    Dates should be in the YYYY-MM-DD format. The local timezone will be used
+    by default. Use the day_boundary parameter to set a reasonable time to
+    transition from one day to the next, if your restaurant has cash
+    transactions after midnight (default is 02:00:00).
+    """
+    return OrderTimeRange(
+        db_location,
+        earliest_time=to_local_datetime(earliest_date + ' ' + day_boundary),
+        cutoff_time=to_local_datetime(
+            latest_date + ' ' + day_boundary) + timedelta(days=1)
+    )
+
+
+class OrderTimeRange(TouchBistroObjectList):
+    """Use this class to get a list of orders for a given date/time range
+
+    kwargs:
+        - earliest_time (datetime object)
+        - cutoff_time (datetime object)
+    """
+
+    #: Query to get a list of modifier uuids for this order item
+    QUERY = """SELECT
+            ZORDER
+        FROM ZPAIDORDER
+        WHERE
+            ZPAYDATE >= :earliest_time AND
+            ZPAYDATE < :cutoff_time
+        ORDER BY Z_PK ASC
+        """
+
+    @property
+    def bindings(self):
+        """Assemble query binding attributes by converting datetime to cocoa"""
+        return {
+            'earliest_time': datetime_2_cocoa(
+                self.kwargs.get('earliest_time')),
+            'cutoff_time': datetime_2_cocoa(
+                self.kwargs.get('cutoff_time')
+            )
+        }
+
+    def _vivify_db_row(self, row):
+        return OrderFromId(
+            self._db_location,
+            order_id=row['ZORDER'],
+            parent=self.parent)
 
 
 class Order(TouchBistroDBObject):
@@ -84,6 +141,8 @@ class Order(TouchBistroDBObject):
         WHERE ZORDER.ZORDERNUMBER = :order_number
         ORDER BY ZORDER.Z_PK DESC LIMIT 1 /* there can be more than 1 */
     """
+    # TODO: the LIMIT 1 is surely a problem that is leading to an oversight of
+    # some sort. Investigate why there are sometimes more than 1 row.
 
     QUERY_BINDING_ATTRIBUTES = ['order_number']
 
@@ -340,6 +399,58 @@ class Order(TouchBistroDBObject):
         return output
 
 
+class OrderFromId(Order):
+    """Get detailed information about an order based on its ID number
+    (not the order number - be careful - this is the Z_PK column)
+
+    kwargs:
+
+    - order_id
+    """
+    QUERY = """SELECT
+        ZORDER.*,
+        ZPAIDORDER.ZPAYDATE, ZPAIDORDER.ZI_BILLNUMBER,
+        ZPAIDORDER.ZI_GRATUITYBEFORETAX, ZPAIDORDER.ZI_GRATUITY,
+        ZPAIDORDER.ZI_TAX2ONTAX1,
+        ZPAIDORDER.ZI_REDUCEDTAX1, ZPAIDORDER.ZI_REDUCEDTAX1BILLAMOUNT,
+        ZPAIDORDER.ZI_REDUCEDTAX2, ZPAIDORDER.ZI_REDUCEDTAX2BILLAMOUNT,
+        ZPAIDORDER.ZI_REDUCEDTAX3, ZPAIDORDER.ZI_REDUCEDTAX3BILLAMOUNT,
+        ZPAIDORDER.ZI_TAX1, ZPAIDORDER.ZI_TAX2, ZPAIDORDER.ZI_TAX3,
+        ZPAIDORDER.ZLOYALTYCREDITBALANCE, ZPAIDORDER.ZLOYALTYPOINTSBALANCE,
+        ZPAIDORDER.ZOUTSTANDINGBALANCE, ZPAIDORDER.ZLOYALTYACCOUNTNAME,
+        ZPAIDORDER.ZPARTYNAME, ZPAIDORDER.ZTABLENAME,
+        ZPAIDORDER.ZI_GROUPNUMBER,
+        ZPAIDORDER.ZI_PARTYSIZE, ZPAIDORDER.ZI_SPLIT,
+        CASE ZPAIDORDER.ZI_TAKEOUTTYPE
+            WHEN 2
+                THEN 'bartab'
+            WHEN 1
+                THEN 'delivery'
+            WHEN 0
+                THEN 'takeout'
+            ELSE 'dinein'
+        END TAKEOUT_TYPE,
+        ZPAIDORDER.ZBILLRANGE, ZPAIDORDER.ZCLOSEDTAKEOUT,
+        ZPAIDORDER.ZPAYMENTS,
+        ZWAITER.ZDISPLAYNAME AS WAITERNAME,
+        ZWAITER.ZUUID AS WAITER_UUID,
+        ZCUSTOMTAKEOUTTYPE.ZNAME as CUSTOMTAKEOUTTYPE
+    FROM ZORDER
+    LEFT JOIN ZPAIDORDER ON
+        ZPAIDORDER.Z_PK = ZORDER.ZPAIDORDER
+    LEFT JOIN ZCLOSEDTAKEOUT ON
+        ZCLOSEDTAKEOUT.Z_PK = ZPAIDORDER.ZCLOSEDTAKEOUT
+    LEFT JOIN ZCUSTOMTAKEOUTTYPE ON
+        ZCUSTOMTAKEOUTTYPE.Z_PK = ZCLOSEDTAKEOUT.ZCUSTOMTAKEOUTTYPE
+    LEFT JOIN ZWAITER ON
+        ZWAITER.ZUUID = ZPAIDORDER.ZWAITERUUID
+    WHERE ZORDER.Z_PK = :order_id
+    ORDER BY ZORDER.Z_PK DESC LIMIT 1
+    """
+
+    QUERY_BINDING_ATTRIBUTES = ['order_id']
+
+
 class OrderItemList(TouchBistroObjectList):
     """Use this class to get a list of items for an order.
     It behaves like a sequence, where you can simply iterate over the object,
@@ -449,8 +560,10 @@ class OrderItem(TouchBistroDBObject):
 
     @property
     def datetime(self):
-        """Alias for :meth:`sent_time`"""
-        return self.sent_time
+        """Return the date and time that the item was added to the order"""
+        if self.db_results['ZCREATEDATE']:
+            return cocoa_2_datetime(self.db_results['ZCREATEDATE'])
+        return None
 
     @property
     def sent_time(self):
@@ -499,7 +612,7 @@ class OrderItem(TouchBistroDBObject):
         output = ""
         name = ""
         if self.quantity > 1:
-            name += f"{self.quantity} x "
+            name += f"{self.quantity:.0f} x "
         name += self.menu_item.name
         output += "{:38s} ${:3.2f}\n".format(
             name, self.price)
@@ -542,7 +655,7 @@ class OrderItem(TouchBistroDBObject):
         Tax is not included by default"""
         amount = self.price
         amount += self.discounts.total()
-        amount += self.modifiers.total()
+        amount += self.quantity * self.modifiers.total()
         return amount
 
     @property

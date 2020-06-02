@@ -183,6 +183,8 @@ class ItemModifier(TouchBistroDBObject):
         """Output the modifier in a form suitable for receipts and chits"""
         try:
             output = "+ "
+            if self.parent.quantity > 1:
+                output += f"{self.parent.quantity:.0f} x "
             if self.price > 0:
                 output += f"${self.price:3.2f}: "
             output += f"{self.name}\n"

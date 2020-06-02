@@ -19,6 +19,10 @@ class TouchBistroDBQueryResult():
     #: (the arg name should be used in the QUERY above)
     QUERY_BINDING_ATTRIBUTES = []
 
+    #: This program runs single threaded and only needs one handle, centralize
+    #: it here.
+    __db_handle = None
+
     def __init__(self, db_location, **kwargs):
         self.log = logging.getLogger("{}.{}".format(
             self.__class__.__module__, self.__class__.__name__
@@ -28,7 +32,6 @@ class TouchBistroDBQueryResult():
         self._db_results = kwargs.get('db_results', None)
         self.kwargs = kwargs
         self._bindings = None
-        self.__db_handle = None
         self.__cursor = None
 
     @property
@@ -43,20 +46,21 @@ class TouchBistroDBQueryResult():
                     result_dict[key] = result[key]
                 self.log.debug(
                     "QUERY: \n%s\nBINDING: %s\nRESULT: %s",
-                    self.QUERY, self.QUERY_BINDING_ATTRIBUTES, result_dict)
+                    self.QUERY, self.bindings, result_dict)
                 self._db_results.append(result_dict)
         return self._db_results
 
     @property
     def db_handle(self):
         "Returns an sqlite3 database handle"
-        if self.__db_handle is None:
+        if TouchBistroDBQueryResult.__db_handle is None:
             self.log.debug('getting an sqlite3 database handle')
-            self.__db_handle = sqlite3.connect(self._db_location)
-            self.__db_handle.row_factory = sqlite3.Row
-            self.__db_handle.cursor().execute(
+            handle = sqlite3.connect(self._db_location)
+            handle.row_factory = sqlite3.Row
+            handle.cursor().execute(
                 f"PRAGMA cache_size = -{SQLITE3_CACHE_SIZE:d}")
-        return self.__db_handle
+            TouchBistroDBQueryResult.__db_handle = handle
+        return TouchBistroDBQueryResult.__db_handle
 
     @property
     def bindings(self):

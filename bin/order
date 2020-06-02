@@ -3,6 +3,7 @@
 
 Usage:
     order [options] fetch <db_path> <order_number>
+    order [options] report <db_path> <earliest_date> [<latest_date>]
 
 Options:
 
@@ -10,6 +11,10 @@ Options:
  -j, --json     Output a JSON summary for the order
  -c, --csv      Output as CSV
  -f, --file=F   Specify an output file instead of stdout
+ --day-boundary=X  Specify a day boundary time [default: 02:00:00]
+
+If <latest_date> is omitted, it is assumed to be the same as earliest
+date (for a one-day report).
 
 """
 import os
@@ -18,16 +23,70 @@ import logging
 import json
 import csv
 from docopt import docopt
-from touchbistro.order import Order
-from touchbistro.reports import explode_order, explode_order_fields
+from touchbistro.order import Order, get_orders_for_date_range
+from touchbistro.reports import (
+    explode_order, explode_order_fields)
+
+CSV_DATE_FORM = '%Y-%m-%d %I:%M:%S %p'
 
 
-def write_to_csv(handle, order):
+def format_datetime(order_item):
+    """Converts datetimes to strings for CSV output"""
+    if order_item.get('datetime', None):
+        order_item['datetime'] = order_item['datetime'].strftime(CSV_DATE_FORM)
+    if order_item.get('sent_time', None):
+        order_item['sent_time'] = order_item['sent_time'].strftime(
+            CSV_DATE_FORM)
+    return order_item
+
+
+def write_orders_to_csv(handle, orders):
+    "Output the orders as CSV data"
     writer = csv.DictWriter(
         handle, dialect='excel', fieldnames=explode_order_fields())
     writer.writeheader()
-    for row in explode_order(order):
-        writer.writerow(row)
+    for order in orders:
+        for lineitem in explode_order(order):
+            order_item = format_datetime(lineitem)
+            writer.writerow(order_item)
+
+
+def write_order_to_csv(handle, order):
+    "Output the exploded order as CSV data"
+    writer = csv.DictWriter(
+        handle, dialect='excel', fieldnames=explode_order_fields())
+    writer.writeheader()
+    for lineitem in explode_order(order):
+        order_item = format_datetime(lineitem)
+        writer.writerow(order_item)
+
+
+def write_order(args, order, output):
+    "Dump an order in the specified output format"
+    if args.get('--csv'):
+        write_order_to_csv(output, order)
+    elif args.get('--json'):
+        json.dump(
+            order.summary(), output, indent=4,
+            sort_keys=True, default=str)
+    else:
+        output.writelines(order.receipt_form())
+
+
+def write_orders(args, orders, output):
+    "Dump orders in the specified output format"
+    if args.get('--csv'):
+        write_orders_to_csv(output, orders)
+    elif args.get('--json'):
+        for item in orders:
+            if output == sys.stdout:
+                print(json.dumps(
+                    item, indent=4, sort_keys=True, default=str))
+            else:
+                json.dump(item, output, sort_keys=True, default=str)
+    else:
+        for order in orders:
+            output.writelines(order.receipt_form())
 
 
 if __name__ == '__main__':
@@ -38,29 +97,33 @@ if __name__ == '__main__':
         print(ARGS, file=sys.stderr)
         logging.getLogger().setLevel(logging.DEBUG)
 
-    ORDER = Order(
-        ARGS.get('<db_path>'),
-        order_number=int(ARGS.get('<order_number>'))
-    )
+    if ARGS.get('fetch', None):
+        ORDER = Order(
+            ARGS.get('<db_path>'),
+            order_number=int(ARGS.get('<order_number>'))
+        )
 
-    if ARGS.get('--file'):
-        with open(
-                os.path.expanduser(ARGS.get('--file')), 'w',
-                encoding='utf-8') as outfile:
-            if ARGS.get('--csv'):
-                write_to_csv(outfile, ORDER)
-            elif ARGS.get('--json'):
-                json.dump(
-                    ORDER.summary(), outfile, indent=4,
-                    sort_keys=True, default=str)
-            else:
-                outfile.writelines(ORDER.receipt_form())
-    else:
-        if ARGS.get('--csv'):
-            write_to_csv(sys.stdout, ORDER)
-        elif ARGS.get('--json'):
-            print(json.dumps(
-                ORDER.summary(), indent=4, sort_keys=True, default=str))
+        if ARGS.get('--file'):
+            with open(
+                    os.path.expanduser(ARGS.get('--file')), 'w',
+                    encoding='utf-8') as outfile:
+                write_order(ARGS, ORDER, outfile)
         else:
-            print(ORDER.receipt_form())
+            write_order(ARGS, ORDER, sys.stdout)
+    elif ARGS.get('report', None):
+        if not ARGS.get('<latest_date>', None):
+            ARGS['<latest_date>'] = ARGS.get('<earliest_date>')
+        ORDERS = get_orders_for_date_range(
+            ARGS.get('<db_path>'),
+            earliest_date=ARGS.get('<earliest_date>'),
+            latest_date=ARGS.get('<latest_date>', ARGS.get('<earliest_date>')),
+            day_boundary=ARGS.get('--day-boundary')
+        )
+        if ARGS.get('--file'):
+            with open(
+                    os.path.expanduser(ARGS.get('--file')), 'w',
+                    encoding='utf-8') as outfile:
+                write_orders(ARGS, ORDERS, outfile)
+        else:
+            write_orders(ARGS, ORDERS, sys.stdout)
     sys.exit(0)

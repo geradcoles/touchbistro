@@ -153,7 +153,10 @@ class ItemDiscount(TouchBistroDBObject):
     @property
     def authorizer_name(self):
         "Returns the name of the waiter that authorized the discount"
-        return self.authorizer.display_name
+        try:
+            return self.authorizer.display_name
+        except TypeError:
+            return None
 
     def receipt_form(self):
         """Print the discount in a format suitable for receipts"""

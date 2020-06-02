@@ -1,6 +1,6 @@
 """This module contains methods for performing reports against the database.
 """
-from .order import Order, OrderItem
+from .order import Order, OrderFromId, OrderItem
 from .discount import ItemDiscount
 from .modifier import ItemModifier
 from .payment import Payment
@@ -16,6 +16,17 @@ ORDER_BASIC_FIELDS = ['bill_number', 'order_number', 'order_type']
 #: Define the attributes to include in order reports
 ORDER_REPORT_FIELDS = {
     Order: (
+        'table_name',
+        'party_name',
+        'custom_takeout_type',
+        'waiter_name',
+        'datetime',
+        'subtotal',
+        'taxes',
+        'total',
+        'object_type',
+    ),
+    OrderFromId: (
         'table_name',
         'party_name',
         'custom_takeout_type',
@@ -80,7 +91,7 @@ def explode_order_fields():
         'payment_type', 'payment_number', 'party_name',
         'customer_account_id',
         'was_sent', 'authorizer_name', 'card_type',
-        'auth_number',  'table_name',
+        'auth_number', 'table_name',
         'customer_id')
 
 
@@ -123,10 +134,3 @@ def explode_order(order):
             yield {**order_basics, **get_obj_fields(discount)}
     for payment in order.payments:
         yield {**order_basics, **get_obj_fields(payment)}
-
-
-class SalesReport():
-    """This class provides methods for generating a daily sales report that
-    provides a detailed breakdown of every line item, modifier, and discount
-    from every order in the specified time period.
-    """

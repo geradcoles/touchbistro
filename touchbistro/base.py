@@ -80,7 +80,7 @@ class TouchBistroDBObject(TouchBistroDBQueryResult):
         summary = self.summary()
         output = f"{self.__class__.__name__}(\n"
         for attr in self.META_ATTRIBUTES:
-            output += f"  {attr}: {summary[attr]}\n"
+            output += f"  {attr}: {summary['meta'][attr]}\n"
         output += ")"
         return output
 
