@@ -1,10 +1,16 @@
 """This module contains methods for performing reports against the database.
 """
+import sys
+import csv
+import json
 from .order import Order, OrderFromId, OrderItem
 from .discount import ItemDiscount
 from .modifier import ItemModifier
 from .payment import Payment
-from .loyalty import LoyaltyActivity
+from .loyalty import LoyaltyActivity, get_loyalty_for_date_range
+
+
+CSV_DATE_FORM = '%Y-%m-%d %I:%M:%S %p'
 
 
 REPORTED_OBJECTS = (
@@ -186,3 +192,71 @@ def explode_modifiers(order_basics, modifiers, depth=0):
         yield {**order_basics, **get_obj_fields(modifier)}
         yield from explode_modifiers(
             order_basics, modifier.nested_modifiers, depth=depth+1)
+
+
+def loyalty_report(db_path, earliest_date, latest_date, day_boundary, output,
+                   in_csv=False, in_json=False, order_rept=False):
+    "Dump loyalty in the specified output format"
+    loyalty = get_loyalty_for_date_range(
+        db_path, earliest_date=earliest_date,
+        latest_date=latest_date, day_boundary=day_boundary)
+    header = True
+    if in_csv:
+        fields = explode_loyalty_fields()
+        if order_rept:
+            fields = explode_order_fields()
+            header = False
+        write_loyalty_to_csv(output, loyalty, header=header, fields=fields)
+    elif in_json:
+        for item in loyalty:
+            if output == sys.stdout:
+                print(json.dumps(
+                    item.summary(), indent=4, sort_keys=True, default=str))
+            else:
+                json.dump(item.summary(), output, sort_keys=True, default=str)
+    else:
+        for loyalty_item in loyalty:
+            print(loyalty_item.summary())
+
+
+def format_datetime(order_item):
+    """Converts datetimes to strings for CSV output"""
+    if order_item.get('datetime', None):
+        order_item['datetime'] = order_item['datetime'].strftime(CSV_DATE_FORM)
+    if order_item.get('sent_time', None):
+        order_item['sent_time'] = order_item['sent_time'].strftime(
+            CSV_DATE_FORM)
+    return order_item
+
+
+def write_orders_to_csv(handle, orders):
+    "Output the orders as CSV data"
+    writer = csv.DictWriter(
+        handle, dialect='excel', fieldnames=explode_order_fields())
+    writer.writeheader()
+    for order in orders:
+        for lineitem in explode_order(order):
+            order_item = format_datetime(lineitem)
+            writer.writerow(order_item)
+
+
+def write_loyalty_to_csv(
+        handle, loyalty, header=True, fields=explode_loyalty_fields()):
+    "Output the orders as CSV data"
+    writer = csv.DictWriter(
+        handle, dialect='excel', fieldnames=fields)
+    if header:
+        writer.writeheader()
+    for item in loyalty:
+        item = format_datetime(explode_loyalty(item))
+        writer.writerow(item)
+
+
+def write_order_to_csv(handle, order):
+    "Output the exploded order as CSV data"
+    writer = csv.DictWriter(
+        handle, dialect='excel', fieldnames=explode_order_fields())
+    writer.writeheader()
+    for lineitem in explode_order(order):
+        order_item = format_datetime(lineitem)
+        writer.writerow(order_item)

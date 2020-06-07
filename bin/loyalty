@@ -19,26 +19,8 @@ date (for a one-day report).
 import os
 import sys
 import logging
-import json
 from docopt import docopt
-from touchbistro.loyalty import get_loyalty_for_date_range
-from touchbistro.csv import write_loyalty_to_csv
-
-
-def write_loyalty(args, loyalty, output):
-    "Dump loyalty in the specified output format"
-    if args.get('--csv'):
-        write_loyalty_to_csv(output, loyalty)
-    elif args.get('--json'):
-        for item in loyalty:
-            if output == sys.stdout:
-                print(json.dumps(
-                    item.summary(), indent=4, sort_keys=True, default=str))
-            else:
-                json.dump(item.summary(), output, sort_keys=True, default=str)
-    else:
-        for loyalty_item in loyalty:
-            print(loyalty_item.summary())
+from touchbistro.reports import loyalty_report
 
 
 if __name__ == '__main__':
@@ -49,21 +31,28 @@ if __name__ == '__main__':
         print(ARGS, file=sys.stderr)
         logging.getLogger().setLevel(logging.DEBUG)
 
-    if not ARGS.get('<latest_date>', None):
-        ARGS['<latest_date>'] = ARGS.get('<earliest_date>')
-
-    LOYALTY = get_loyalty_for_date_range(
-        ARGS.get('<db_path>'),
-        earliest_date=ARGS.get('<earliest_date>'),
-        latest_date=ARGS.get('<latest_date>', ARGS.get('<earliest_date>')),
-        day_boundary=ARGS.get('--day-boundary')
-    )
+    if not ARGS.get('<latest_date>'):
+        ARGS['<latest_date>'] = ARGS['<earliest_date>']
 
     if ARGS.get('--file'):
         with open(
                 os.path.expanduser(ARGS.get('--file')), 'w',
                 encoding='utf-8') as outfile:
-            write_loyalty(ARGS, LOYALTY, outfile)
+            loyalty_report(
+                ARGS.get('<db_path>'),
+                ARGS.get('<earliest_date>'),
+                ARGS.get('<earliest_date>'),
+                ARGS.get('--day-boundary'),
+                outfile,
+                in_csv=ARGS.get('--csv'),
+                in_json=ARGS.get('--json'))
     else:
-        write_loyalty(ARGS, LOYALTY, sys.stdout)
+        loyalty_report(
+            ARGS.get('<db_path>'),
+            ARGS.get('<earliest_date>'),
+            ARGS.get('<earliest_date>'),
+            ARGS.get('--day-boundary'),
+            sys.stdout,
+            in_csv=ARGS.get('--csv'),
+            in_json=ARGS.get('--json'))
     sys.exit(0)

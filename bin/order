@@ -12,6 +12,10 @@ Options:
  -c, --csv      Output as CSV
  -f, --file=F   Specify an output file instead of stdout
  --day-boundary=X  Specify a day boundary time [default: 02:00:00]
+ --with-loyalty  Include a loyalty report in output
+
+If --with-loyalty is used, duplicate records will exist betweeen order payments
+and the loyalty report.
 
 If <latest_date> is omitted, it is assumed to be the same as earliest
 date (for a one-day report).
@@ -23,7 +27,9 @@ import logging
 import json
 from docopt import docopt
 from touchbistro.order import Order, get_orders_for_date_range
-from touchbistro.csv import write_orders_to_csv, write_order_to_csv
+from touchbistro.reports import (
+    loyalty_report, write_orders_to_csv, write_order_to_csv,
+)
 
 
 def write_order(args, order, output):
@@ -89,6 +95,26 @@ if __name__ == '__main__':
                     os.path.expanduser(ARGS.get('--file')), 'w',
                     encoding='utf-8') as outfile:
                 write_orders(ARGS, ORDERS, outfile)
+                if ARGS.get('--with-loyalty'):
+                    loyalty_report(
+                        ARGS.get('<db_path>'),
+                        ARGS.get('<earliest_date>'),
+                        ARGS.get('<earliest_date>'),
+                        ARGS.get('--day-boundary'),
+                        outfile,
+                        in_csv=ARGS.get('--csv'),
+                        in_json=ARGS.get('--json'),
+                        order_rept=True)
         else:
             write_orders(ARGS, ORDERS, sys.stdout)
+            if ARGS.get('--with-loyalty'):
+                loyalty_report(
+                    ARGS.get('<db_path>'),
+                    ARGS.get('<earliest_date>'),
+                    ARGS.get('<earliest_date>'),
+                    ARGS.get('--day-boundary'),
+                    sys.stdout,
+                    in_csv=ARGS.get('--csv'),
+                    in_json=ARGS.get('--json'),
+                    order_rept=True)
     sys.exit(0)
