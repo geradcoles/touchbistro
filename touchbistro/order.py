@@ -96,7 +96,7 @@ class Order(TouchBistroDBObject):
         'order_number', 'order_type', 'table_name',
         'bill_number', 'party_name', 'party_as_split_order',
         'custom_takeout_type', 'waiter_name', 'datetime',
-        'subtotal', 'taxes', 'total'
+        'subtotal', 'taxes', 'total', 'party_size'
     ]
 
     #: Query to get as much information about an order as possible based on its
@@ -177,6 +177,11 @@ class Order(TouchBistroDBObject):
             return self.db_results['ZPARTYNAME']
         except KeyError:
             return None
+
+    @property
+    def party_size(self):
+        "Return the size of the party"
+        return self.db_results['ZI_PARTYSIZE']
 
     @property
     def table_name(self):
@@ -340,9 +345,10 @@ class Order(TouchBistroDBObject):
         except AttributeError:
             datetime = "None"
         output = (
-            f"\n       ORDER DETAILS FOR ORDER #{self.order_number}\n\n"
+            f"\n       DETAILS FOR ORDER #{self.order_number}\n\n"
             f"Order Date/Time:     \t{datetime}\n"
-            f"Table Name: {self.table_name}\tParty Name: {self.party_name}\n"
+            f"Table Name: {self.table_name}\tParty: {self.party_name} "
+            f"[{self.party_size} seat]\n"
             f"Bill Number: {self.bill_number}\tOrder Type: {self.order_type}\n"
             f"Server Name: {self.waiter_name}\n"
         )
@@ -618,7 +624,7 @@ class OrderItem(TouchBistroDBObject):
             name, self.price)
         has_price_mod = False
         for modifier in self.modifiers:
-            output += "  " + modifier.receipt_form()
+            output += modifier.receipt_form()
             if modifier.price:
                 has_price_mod = True
         for discount in self.discounts:
@@ -645,6 +651,15 @@ class OrderItem(TouchBistroDBObject):
             price = self.open_price
         return self.quantity * price
 
+    def was_voided(self):
+        """Inspect discounts for this line item to see if it has a void. Voided
+        items do not contribute to sales totals and have no value for reports.
+        """
+        for discount in self.discounts:
+            if discount.is_void():
+                return True
+        return False
+
     def subtotal(self):
         """Returns the total value for the line item, by:
 
@@ -655,7 +670,7 @@ class OrderItem(TouchBistroDBObject):
         Tax is not included by default"""
         amount = self.price
         amount += self.discounts.total()
-        amount += self.quantity * self.modifiers.total()
+        amount += self.modifiers.total()
         return amount
 
     @property

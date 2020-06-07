@@ -2,6 +2,7 @@
 payments.
 """
 from .base import TouchBistroDBObject, TouchBistroObjectList
+from .loyalty import LoyaltyActivity
 from .dates import cocoa_2_datetime
 
 
@@ -63,7 +64,8 @@ class Payment(TouchBistroDBObject):
                        'amount', 'tip', 'change', 'balance',
                        'refundable_amount', 'original_payment_uuid',
                        'customer_account_id', 'customer_id',
-                       'card_type', 'auth_number', 'datetime']
+                       'card_type', 'auth_number', 'datetime',
+                       ]
 
     #: Query to get details about this discount
     QUERY = """SELECT
@@ -174,6 +176,24 @@ class Payment(TouchBistroDBObject):
             except AttributeError:
                 return None
 
+    def is_loyalty(self):
+        """Returns true if this was a loyalty-type payment"""
+        if self.card_type == 'Loyalty':
+            return True
+        return False
+
+    @property
+    def loyalty_activity(self):
+        """Returns a LoyaltyActivity object for loyalty-type transactions,
+        None otherwise"""
+        if self.is_loyalty():
+            return LoyaltyActivity(
+                self._db_location,
+                transaction_id=self.auth_number,
+                parent=self
+            )
+        return None
+
     def receipt_form(self):
         """Output payment info in a form suitable for receipts"""
         pay_type = ""
@@ -190,8 +210,20 @@ class Payment(TouchBistroDBObject):
         output += ' ' * 33 + f"Tip:  ${self.tip:3.2f}\n"
         output += ' ' * 19 + f"Remaining Balance:  ${self.balance:3.2f}\n"
         if self.payment_type == PAYMENT_TYPES[4]:  # customer account
-            cust_acct_info = f"Account ID: {self.customer_account_id:6d}"
-            output += (
-                f"{cust_acct_info:>45}\n"
-            )
+            cust_acct_info = f"  Account ID: {self.customer_account_id:6d}"
+            output += f"{cust_acct_info:>45}\n"
+        elif self.is_loyalty():
+            output += f"                   Account #: "
+            output += f"{self.loyalty_activity.account_number}\n"
+            output += f"                   [Waiter: "
+            output += f"{self.loyalty_activity.waiter_name}]\n"
+        return output
+
+    def summary(self):
+        """Add loyalty information to default summary"""
+        output = super(Payment, self).summary()
+        try:
+            output['loyalty'] = self.loyalty_activity.summary()
+        except AttributeError:
+            pass
         return output

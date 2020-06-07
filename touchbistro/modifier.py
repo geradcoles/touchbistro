@@ -27,6 +27,7 @@ class ItemModifierList(TouchBistroObjectList):
         amount = 0.0
         for modifier in self.items:
             amount += modifier.price
+            amount += modifier.nested_modifiers.total()
         return amount
 
     def _vivify_db_row(self, row):
@@ -84,6 +85,13 @@ class ItemModifier(TouchBistroDBObject):
         """
 
     QUERY_BINDING_ATTRIBUTES = ['modifier_uuid']
+
+    @property
+    def object_type(self):
+        "Returns the name of this object's class"
+        if self.kwargs.get('is_nested', None):
+            return 'Nested' + self.__class__.__name__
+        return self.__class__.__name__
 
     @property
     def is_required(self):
@@ -152,9 +160,18 @@ class ItemModifier(TouchBistroDBObject):
 
     @property
     def order_item(self):
-        """If a menu item was chosen as a modifer, returns the corresponding
-        order item ID for that item"""
+        """For nested modifers, return the corresponding order item ID that
+        may/should have further modifiers associated with it."""
         return self.db_results['ZORDERITEM']
+
+    @property
+    def nested_modifiers(self):
+        """Returns an ItemModifierList containing any nested modifiers"""
+        return ItemModifierList(
+            self._db_location,
+            order_item_id=self.order_item,
+            parent=self.parent,
+            is_nested=True)
 
     @property
     def datetime(self):
@@ -169,8 +186,8 @@ class ItemModifier(TouchBistroDBObject):
 
     @property
     def price(self):
-        "Return the price associated with the modifier"
-        return self.db_results['ZI_PRICE']
+        "Return the price associated with the modifier, adjusted for quantity"
+        return self.parent.quantity * self.db_results['ZI_PRICE']
 
     @property
     def name(self):
@@ -179,15 +196,16 @@ class ItemModifier(TouchBistroDBObject):
             return self.db_results['MENU_ITEM_NAME']
         return self.db_results['ZI_NAME']
 
-    def receipt_form(self):
+    def receipt_form(self, depth=1):
         """Output the modifier in a form suitable for receipts and chits"""
         try:
-            output = "+ "
-            if self.parent.quantity > 1:
-                output += f"{self.parent.quantity:.0f} x "
+            output = "  " * depth
+            output += "+ "
             if self.price > 0:
                 output += f"${self.price:3.2f}: "
             output += f"{self.name}\n"
+            for modifier in self.nested_modifiers:
+                output += modifier.receipt_form(depth=(depth+1))
             return output
         except Exception as err:
             raise RuntimeError(

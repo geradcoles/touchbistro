@@ -4,6 +4,7 @@ from .order import Order, OrderFromId, OrderItem
 from .discount import ItemDiscount
 from .modifier import ItemModifier
 from .payment import Payment
+from .loyalty import LoyaltyActivity
 
 
 REPORTED_OBJECTS = (
@@ -18,6 +19,7 @@ ORDER_REPORT_FIELDS = {
     Order: (
         'table_name',
         'party_name',
+        'party_size',
         'custom_takeout_type',
         'waiter_name',
         'datetime',
@@ -29,6 +31,7 @@ ORDER_REPORT_FIELDS = {
     OrderFromId: (
         'table_name',
         'party_name',
+        'party_size',
         'custom_takeout_type',
         'waiter_name',
         'datetime',
@@ -77,6 +80,12 @@ ORDER_REPORT_FIELDS = {
         'card_type',
         'auth_number',
         'object_type',
+    ),
+    LoyaltyActivity: (
+        'datetime',
+        'balance_change',
+        'account_number',
+        'waiter_name'
     )
 }
 
@@ -85,11 +94,12 @@ def explode_order_fields():
     "Returns a list of fields reported by explode_order"
     return (
         'bill_number', 'order_number', 'datetime', 'order_type', 'object_type',
+        'bill_waiter', 'party_size',
         'custom_takeout_type', 'discount_type',
         'waiter_name', 'name', 'sales_category', 'quantity', 'price',
         'subtotal', 'taxes', 'total', 'tip', 'amount', 'change', 'balance',
         'payment_type', 'payment_number', 'party_name',
-        'customer_account_id',
+        'customer_account_id', 'balance_change', 'account_number',
         'was_sent', 'authorizer_name', 'card_type',
         'auth_number', 'table_name',
         'customer_id')
@@ -125,12 +135,27 @@ def explode_order(order):
     order_basics = dict()
     for field in ORDER_BASIC_FIELDS:
         order_basics[field] = getattr(order, field)
+    # add this here because we don't want to lose the waiter_name from line
+    order_basics['bill_waiter'] = order.waiter_name
     yield {**order_basics, **get_obj_fields(order)}
     for item in order.order_items:
+        if item.was_voided():
+            # voided items have sales associated with categories, and discounts
+            # as well, which will cause reporting errors if allowed through.
+            continue
         yield {**order_basics, **get_obj_fields(item)}
-        for modifier in item.modifiers:
-            yield {**order_basics, **get_obj_fields(modifier)}
+        yield from explode_modifiers(order_basics, item.modifiers)
         for discount in item.discounts:
             yield {**order_basics, **get_obj_fields(discount)}
     for payment in order.payments:
         yield {**order_basics, **get_obj_fields(payment)}
+        if payment.is_loyalty():
+            yield {**order_basics, **get_obj_fields(payment.loyalty_activity)}
+
+
+def explode_modifiers(order_basics, modifiers, depth=0):
+    """Explode modifiers, with nesting support"""
+    for modifier in modifiers:
+        yield {**order_basics, **get_obj_fields(modifier)}
+        yield from explode_modifiers(
+            order_basics, modifier.nested_modifiers, depth=depth+1)

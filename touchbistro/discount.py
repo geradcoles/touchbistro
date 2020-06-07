@@ -103,7 +103,11 @@ class ItemDiscount(TouchBistroDBObject):
     @property
     def amount(self):
         "Returns the amount discounted for the OrderItem"
-        return self.db_results['ZI_AMOUNT']
+        if self.is_void():
+            # void "amount" fields are the total for the voided line item,
+            # including quantity multiplier
+            return self.db_results['ZI_AMOUNT']
+        return self.parent.quantity * self.db_results['ZI_AMOUNT']
 
     @property
     def price(self):
@@ -157,6 +161,12 @@ class ItemDiscount(TouchBistroDBObject):
             return self.authorizer.display_name
         except TypeError:
             return None
+
+    def is_void(self):
+        "Returns true if this is a void rather than a discount"
+        if self.discount_type.upper() == "VOID":
+            return True
+        return False
 
     def receipt_form(self):
         """Print the discount in a format suitable for receipts"""
