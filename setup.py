@@ -23,7 +23,8 @@ setup(
     install_requires=[],
     scripts=[
         'bin/payments',
-        'bin/order'
+        'bin/order',
+	'bin/loyalty',
     ],
     test_suite="nose.collector",
 )

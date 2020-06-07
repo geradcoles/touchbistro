@@ -84,7 +84,8 @@ ORDER_REPORT_FIELDS = {
         'datetime',
         'balance_change',
         'account_number',
-        'waiter_name'
+        'waiter_name',
+        'transaction_id'
     )
 }
 
@@ -101,7 +102,21 @@ def explode_order_fields():
         'customer_account_id', 'balance_change', 'account_number',
         'was_sent', 'authorizer_name', 'card_type',
         'auth_number', 'table_name',
-        'customer_id')
+        'customer_id', 'transaction_id')
+
+
+def explode_loyalty_fields():
+    "Returns a list of fields reported by explode_loyalty"
+    return ORDER_REPORT_FIELDS[LoyaltyActivity]
+
+
+def explode_loyalty(loyalty):
+    """Given a set of loyalty items (as a list-type object), explode them into
+    fields suitable for reporting"""
+    output = {}
+    for field in ORDER_REPORT_FIELDS[LoyaltyActivity]:
+        output[field] = getattr(loyalty, field)
+    return output
 
 
 def get_obj_fields(obj):

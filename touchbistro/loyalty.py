@@ -1,8 +1,9 @@
 """The Loyalty module covers classes and methods related to spending and
 charging up of TouchBistro Loyalty cards/accounts."""
-from .base import TouchBistroDBObject
+from datetime import timedelta
+from .base import TouchBistroDBObject, TouchBistroObjectList
 from .waiter import Waiter
-from .dates import cocoa_2_datetime
+from .dates import cocoa_2_datetime, datetime_2_cocoa, to_local_datetime
 
 LOYALTY_ACTIVITY_TYPE_MAP = {
     0: "Reduce Balance",
@@ -12,6 +13,63 @@ LOYALTY_ACTIVITY_TYPE_MAP = {
 LOYALTY_TYPE_MAP = {
     0: "Loyalty Account"
 }
+
+
+def get_loyalty_for_date_range(
+        db_location, earliest_date, latest_date, day_boundary='02:00:00'):
+    """Given an earliest and a latest date, return an LoyaltyActivityByDate
+    object containing all the orders for that date period. latest_date is
+    inclusive, so if you specify 2020-05-31 as the latest_date, all orders from
+    that day will be included in the results.
+
+    Dates should be in the YYYY-MM-DD format. The local timezone will be used
+    by default. Use the day_boundary parameter to set a reasonable time to
+    transition from one day to the next, if your restaurant has cash
+    transactions after midnight (default is 02:00:00).
+    """
+    return LoyaltyActivityByDate(
+        db_location,
+        earliest_time=to_local_datetime(earliest_date + ' ' + day_boundary),
+        cutoff_time=to_local_datetime(
+            latest_date + ' ' + day_boundary) + timedelta(days=1)
+    )
+
+
+class LoyaltyActivityByDate(TouchBistroObjectList):
+    """Use this class to get a list of LoyaltyActivity objects for the given
+    date range.
+
+    kwargs:
+        - earliest_time (datetime object)
+        - cutoff_time (datetime object)
+    """
+
+    #: Query to get a list of modifier uuids for this order item
+    QUERY = """SELECT
+        ZTRANSACTIONID
+    FROM ZLOYALTYACTIVITYLOG
+    WHERE
+        ZCREATEDAT >= :earliest_time AND
+        ZCREATEDAT < :cutoff_time
+    ORDER BY Z_PK ASC
+    """
+
+    @property
+    def bindings(self):
+        """Assemble query binding attributes by converting datetime to cocoa"""
+        return {
+            'earliest_time': datetime_2_cocoa(
+                self.kwargs.get('earliest_time')),
+            'cutoff_time': datetime_2_cocoa(
+                self.kwargs.get('cutoff_time')
+            )
+        }
+
+    def _vivify_db_row(self, row):
+        return LoyaltyActivity(
+            self._db_location,
+            transaction_id=row['ZTRANSACTIONID'],
+            parent=self.parent)
 
 
 class LoyaltyActivity(TouchBistroDBObject):

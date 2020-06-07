@@ -1,0 +1,69 @@
+#!/usr/bin/env python
+"""Get loyalty details from TouchBistro.
+
+Usage:
+    loyalty [options] report <db_path> <earliest_date> [<latest_date>]
+
+Options:
+
+ -d, --debug    Print detailed debug logging
+ -j, --json     Output a JSON summary for the order
+ -c, --csv      Output as CSV
+ -f, --file=F   Specify an output file instead of stdout
+ --day-boundary=X  Specify a day boundary time [default: 02:00:00]
+
+If <latest_date> is omitted, it is assumed to be the same as earliest
+date (for a one-day report).
+
+"""
+import os
+import sys
+import logging
+import json
+from docopt import docopt
+from touchbistro.loyalty import get_loyalty_for_date_range
+from touchbistro.csv import write_loyalty_to_csv
+
+
+def write_loyalty(args, orders, output):
+    "Dump orders in the specified output format"
+    if args.get('--csv'):
+        write_loyalty_to_csv(output, orders)
+    elif args.get('--json'):
+        for item in orders:
+            if output == sys.stdout:
+                print(json.dumps(
+                    item, indent=4, sort_keys=True, default=str))
+            else:
+                json.dump(item, output, sort_keys=True, default=str)
+    else:
+        for order in orders:
+            print(order.summary())
+
+
+if __name__ == '__main__':
+    ARGS = docopt(__doc__, version='loyalty 0.1')
+    logging.basicConfig()
+
+    if ARGS.get('--debug', False):
+        print(ARGS, file=sys.stderr)
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    if not ARGS.get('<latest_date>', None):
+        ARGS['<latest_date>'] = ARGS.get('<earliest_date>')
+
+    LOYALTY = get_loyalty_for_date_range(
+        ARGS.get('<db_path>'),
+        earliest_date=ARGS.get('<earliest_date>'),
+        latest_date=ARGS.get('<latest_date>', ARGS.get('<earliest_date>')),
+        day_boundary=ARGS.get('--day-boundary')
+    )
+
+    if ARGS.get('--file'):
+        with open(
+                os.path.expanduser(ARGS.get('--file')), 'w',
+                encoding='utf-8') as outfile:
+            write_loyalty(ARGS, LOYALTY, outfile)
+    else:
+        write_loyalty(ARGS, LOYALTY, sys.stdout)
+    sys.exit(0)
