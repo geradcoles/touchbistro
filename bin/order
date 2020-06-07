@@ -61,7 +61,7 @@ def write_orders(args, orders, output):
 
 
 if __name__ == '__main__':
-    ARGS = docopt(__doc__, version='7shifts-load-sales 0.1')
+    ARGS = docopt(__doc__, version='order 0.1')
     logging.basicConfig()
 
     if ARGS.get('--debug', False):
