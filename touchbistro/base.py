@@ -84,6 +84,18 @@ class TouchBistroDBObject(TouchBistroDBQueryResult):
         output += ")"
         return output
 
+    def __eq__(self, other):
+        """Compare this object against another. Returns True if both objects
+        have the same UUID"""
+        if isinstance(other, self.__class__):
+            return self.uuid == other.uuid
+        return False
+
+    def __ne__(self, other):
+        """Compare this object against another. Returns True if both objects
+        have a different UUID"""
+        return not self.__eq__(other)
+
 
 class TouchBistroObjectList(TouchBistroDBQueryResult):
     """This class represents a list of objects and provides a sequence-type

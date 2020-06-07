@@ -162,6 +162,30 @@ class ItemDiscount(TouchBistroDBObject):
         except TypeError:
             return None
 
+    def price_by_sales_category(self, gross_sales_breakdown, output=None):
+        """Reports back on the sales categories impacted by this discount. This
+        is complicated because a discount may apply to an order item with
+        nested modifiers, any of which may be associated with a different sales
+        category that the top-level order item. So this code has to look at the
+        parent OrderItem and collect it's Sales Category breakdown, then
+        pro-rate the discount value across those Sales Categories based on
+        their portion of the total for the line item including all modifiers.
+
+        Returns a dictionary where the keys are SalesCategory objects, and the
+        values are the amounts applied to each category. Supports recursion or
+        cumulative math if you pass in the output dictionary."""
+        if output is None:
+            output = dict()
+        gross = 0.0
+        for category in gross_sales_breakdown.keys():
+            gross += gross_sales_breakdown[category]
+        for cat, amount in gross_sales_breakdown.items():
+            if cat in output:
+                output[cat] += self.price * amount / gross
+            else:
+                output[cat] = self.price * amount / gross
+        return output
+
     def is_void(self):
         "Returns true if this is a void rather than a discount"
         if self.discount_type.upper() == "VOID":

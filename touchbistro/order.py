@@ -7,7 +7,7 @@ import sqlite3
 from .base import TouchBistroDBObject, TouchBistroObjectList
 from .dates import cocoa_2_datetime, datetime_2_cocoa, to_local_datetime
 from .discount import ItemDiscountList
-from .modifier import ItemModifierList
+from .modifier import ItemModifierList, modifier_sales_category_amounts
 from .payment import PaymentGroup
 from .menu import MenuItem
 
@@ -43,6 +43,17 @@ def get_orders_for_date_range(
         cutoff_time=to_local_datetime(
             latest_date + ' ' + day_boundary) + timedelta(days=1)
     )
+
+
+def scrub_zero_amounts(input_dict):
+    """Given a dictionary like we use for the sales category breakdowns, with
+    values corresponding to dollar amounts, scrub any keys out of the dict with
+    zero-dollar amounts"""
+    output = dict()
+    for key, value in input_dict.items():
+        if value != 0.0:
+            output[key] = value
+    return output
 
 
 class OrderTimeRange(TouchBistroObjectList):
@@ -96,7 +107,9 @@ class Order(TouchBistroDBObject):
         'order_number', 'order_type', 'table_name',
         'bill_number', 'party_name', 'party_as_split_order',
         'custom_takeout_type', 'waiter_name', 'datetime',
-        'subtotal', 'taxes', 'total', 'party_size'
+        'subtotal', 'taxes', 'total', 'party_size',
+        'gross_sales_by_sales_category', 'discounts_by_sales_category',
+        'net_sales_by_sales_category'
     ]
 
     #: Query to get as much information about an order as possible based on its
@@ -319,6 +332,49 @@ class Order(TouchBistroDBObject):
     def total(self):
         """Calculate the total value of the order, including taxes"""
         return self.subtotal + self.taxes
+
+    def gross_sales_by_sales_category(self, output=None):
+        """Returns a dictionary containing a subtotal of gross sales for all
+        line items and modifiers, broken down by Sales Category, with keys
+        being the SalesCategory object for that category, and values being
+        the gross sales amounts.
+
+        Pass in an output dictionary for cumulative totals, such as from an
+        OrderTimeRange.
+        """
+        if output is None:
+            output = dict()
+        for line_item in self.order_items:
+            output = line_item.gross_sales_by_sales_category(output)
+        return scrub_zero_amounts(output)
+
+    def discounts_by_sales_category(self, output=None):
+        """Returns a dictionary containing a subtotal of discounts for all
+        line items and modifiers, broken down by Sales Category, with keys
+        being the SalesCategory object for that category, and values being
+        the discount amounts.
+
+        Pass in an output dictionary for cumulative totals, such as from an
+        OrderTimeRange."""
+        if output is None:
+            output = dict()
+        for line_item in self.order_items:
+            output = line_item.discounts_by_sales_category(output)
+        return scrub_zero_amounts(output)
+
+    def net_sales_by_sales_category(self, output=None):
+        """Returns a dictionary containing the subtotal of net sales broken
+        down by all Sales Categories used in this order.
+
+        Pass in an output dictionary for cumulative totals, such as from an
+        OrderTimeRange."""
+        if output is None:
+            output = dict()
+        gross = self.gross_sales_by_sales_category()
+        discounts = self.discounts_by_sales_category()
+        for category in gross.keys():
+            output[category] = gross[category] + discounts.get(category, 0.0)
+        return output
 
     def _calc_tax_on_order_item(self, order_item):
         """Given an OrderItem, calculate the tax on the item, in CENTS"""
@@ -596,8 +652,37 @@ class OrderItem(TouchBistroDBObject):
 
     @property
     def sales_category(self):
-        """Returns the sales category associated with this order's menu item"""
+        """Returns the sales category associated with this order's menu item,
+        but not any of its modifiers. See sales_category_breakdown as well"""
         return self.menu_item.sales_category.name
+
+    def gross_sales_by_sales_category(self, output=None):
+        """Returns a dictionary containing a breakdown of gross sales for this
+        line item split across sales categories for the base item plus all its
+        modifiers and nested modifiers. Dict keys are SalesCategory objects and
+        values are the gross sales for that category, for this line item"""
+        if output is None:
+            output = dict()
+        if self.sales_category in output:
+            output[self.sales_category] += self.price
+        else:
+            output[self.sales_category] = self.price
+        for modifier in self.modifiers:
+            output = modifier_sales_category_amounts(
+                modifier, output=output)
+        return scrub_zero_amounts(output)
+
+    def discounts_by_sales_category(self, output=None):
+        """Returns a dictionary containing a breakdown of discounts for this
+        line item split across sales categories for the base item plus all its
+        modifiers and nested modifiers. Dict keys are SalesCategory objects and
+        values are the discount for that category, for this line item"""
+        if output is None:
+            output = dict()
+        breakdown = self.gross_sales_by_sales_category()
+        for discount in self.discounts:
+            output = discount.price_by_sales_category(breakdown, output)
+        return scrub_zero_amounts(output)
 
     def summary(self):
         """Returns a dictionary summary of this order item"""
@@ -651,6 +736,12 @@ class OrderItem(TouchBistroDBObject):
             price = self.open_price
         return self.quantity * price
 
+    @property
+    def gross(self):
+        """Return the total value of this line item including modifiers, but
+        no discounts"""
+        return self.price + self.modifiers.total()
+
     def was_voided(self):
         """Inspect discounts for this line item to see if it has a void. Voided
         items do not contribute to sales totals and have no value for reports.
@@ -668,10 +759,7 @@ class OrderItem(TouchBistroDBObject):
             - Adding any modifier pricing
 
         Tax is not included by default"""
-        amount = self.price
-        amount += self.discounts.total()
-        amount += self.modifiers.total()
-        return amount
+        return self.gross + self.discounts.total()
 
     @property
     def discounts(self):

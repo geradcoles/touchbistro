@@ -54,7 +54,6 @@ ORDER_REPORT_FIELDS = {
         'datetime',
         'waiter_name',
         'name',
-        'price',
         'authorizer_name',
         'discount_type',
         'object_type',
@@ -145,12 +144,25 @@ def explode_order(order):
             continue
         yield {**order_basics, **get_obj_fields(item)}
         yield from explode_modifiers(order_basics, item.modifiers)
-        for discount in item.discounts:
-            yield {**order_basics, **get_obj_fields(discount)}
+        yield from explode_discounts(order_basics, item)
     for payment in order.payments:
         yield {**order_basics, **get_obj_fields(payment)}
         if payment.is_loyalty():
             yield {**order_basics, **get_obj_fields(payment.loyalty_activity)}
+
+
+def explode_discounts(order_basics, item):
+    """Yields a report line item for ItemDiscounts, broken down by each sales
+    category associated with the discount"""
+    gross = item.gross_sales_by_sales_category()
+    for discount in item.discounts:
+        sales_categories = discount.price_by_sales_category(gross)
+        for category, amount in sales_categories.items():
+            yield {
+                **order_basics, **get_obj_fields(discount),
+                'sales_category': category,
+                'price': amount
+            }
 
 
 def explode_modifiers(order_basics, modifiers, depth=0):

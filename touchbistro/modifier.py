@@ -3,6 +3,25 @@ from .base import TouchBistroDBObject, TouchBistroObjectList
 from .menu import MenuItem
 
 
+def modifier_sales_category_amounts(modifier, output=None):
+    """Look at a modifier and collect its Sales Category
+    and Price, and check those to see if they have further nested
+    modifiers, cataloging the values and sales categories into
+    a dictionary, where the keys are SalesCategory objects and the
+    values are the total price of the modifiers for that category.
+    Supports/uses recursion. You can provide an output dict from
+    a parent object or leave output empty to start from this level"""
+    if output is None:
+        output = dict()
+    if modifier.sales_category in output:
+        output[modifier.sales_category] += modifier.price
+    else:
+        output[modifier.sales_category] = modifier.price
+    for submod in modifier.nested_modifiers:
+        modifier_sales_category_amounts(submod, output)
+    return output
+
+
 class ItemModifierList(TouchBistroObjectList):
     """Use this class to get a list of ItemModifier objects for an OrderItem.
     It behaves like a sequence, where you can simply iterate over the object,
