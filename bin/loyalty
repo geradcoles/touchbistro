@@ -25,20 +25,20 @@ from touchbistro.loyalty import get_loyalty_for_date_range
 from touchbistro.csv import write_loyalty_to_csv
 
 
-def write_loyalty(args, orders, output):
-    "Dump orders in the specified output format"
+def write_loyalty(args, loyalty, output):
+    "Dump loyalty in the specified output format"
     if args.get('--csv'):
-        write_loyalty_to_csv(output, orders)
+        write_loyalty_to_csv(output, loyalty)
     elif args.get('--json'):
-        for item in orders:
+        for item in loyalty:
             if output == sys.stdout:
                 print(json.dumps(
-                    item, indent=4, sort_keys=True, default=str))
+                    item.summary(), indent=4, sort_keys=True, default=str))
             else:
-                json.dump(item, output, sort_keys=True, default=str)
+                json.dump(item.summary(), output, sort_keys=True, default=str)
     else:
-        for order in orders:
-            print(order.summary())
+        for loyalty_item in loyalty:
+            print(loyalty_item.summary())
 
 
 if __name__ == '__main__':
