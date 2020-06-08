@@ -100,8 +100,8 @@ ORDER_REPORT_FIELDS = {
 def explode_order_fields():
     "Returns a list of fields reported by explode_order"
     return (
-        'bill_number',  'order_number', 'datetime', 'order_type', 'object_type',
-        'bill_waiter', 'party_size',
+        'bill_number', 'order_number', 'datetime', 'order_type',
+        'object_type', 'bill_waiter', 'party_size',
         'custom_takeout_type', 'discount_type',
         'waiter_name', 'name', 'sales_category', 'quantity', 'price',
         'subtotal', 'taxes', 'total', 'tip', 'amount', 'change', 'balance',
