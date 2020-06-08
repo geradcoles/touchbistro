@@ -99,7 +99,7 @@ if __name__ == '__main__':
                     loyalty_report(
                         ARGS.get('<db_path>'),
                         ARGS.get('<earliest_date>'),
-                        ARGS.get('<earliest_date>'),
+                        ARGS.get('<latest_date>', ARGS.get('<earliest_date>')),
                         ARGS.get('--day-boundary'),
                         outfile,
                         in_csv=ARGS.get('--csv'),
@@ -111,7 +111,7 @@ if __name__ == '__main__':
                 loyalty_report(
                     ARGS.get('<db_path>'),
                     ARGS.get('<earliest_date>'),
-                    ARGS.get('<earliest_date>'),
+                    ARGS.get('<latest_date>', ARGS.get('<earliest_date>')),
                     ARGS.get('--day-boundary'),
                     sys.stdout,
                     in_csv=ARGS.get('--csv'),
