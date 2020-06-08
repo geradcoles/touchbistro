@@ -47,11 +47,6 @@ class TouchBistroDBObject(TouchBistroDBQueryResult):
         except IndexError:
             return None
 
-    @property
-    def object_type(self):
-        "Returns the name of this object's class"
-        return self.__class__.__name__
-
     @classmethod
     def meta_keys(cls):
         """This method provides a full list of meta-attributes associated with

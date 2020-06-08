@@ -72,6 +72,19 @@ class TouchBistroDBQueryResult():
                 self._bindings[attr] = self.kwargs.get(attr)
         return self._bindings
 
+    @property
+    def object_type(self):
+        "Returns the name of this object's class plus any specified suffix"
+        return self.__class__.__name__ + self.object_type_suffix
+
+    @property
+    def object_type_suffix(self):
+        """If the 'object_type_suffix' kwarg  was passed in, return it,
+        otherwise an empty string. Useful in reports where the obj_type field
+        is included and you want a custom suffix to differentiate one set of
+        objects from another, even when they share the same class"""
+        return self.kwargs.get('object_type_suffix', '')
+
     def _fetch_from_db(self):
         """Returns the db result rows for the QUERY"""
         return self.db_handle.cursor().execute(

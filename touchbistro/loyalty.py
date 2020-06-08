@@ -16,7 +16,8 @@ LOYALTY_TYPE_MAP = {
 
 
 def get_loyalty_for_date_range(
-        db_location, earliest_date, latest_date, day_boundary='02:00:00'):
+        db_location, earliest_date, latest_date, day_boundary='02:00:00',
+        object_type_suffix=''):
     """Given an earliest and a latest date, return an LoyaltyActivityByDate
     object containing all the orders for that date period. latest_date is
     inclusive, so if you specify 2020-05-31 as the latest_date, all orders from
@@ -31,7 +32,8 @@ def get_loyalty_for_date_range(
         db_location,
         earliest_time=to_local_datetime(earliest_date + ' ' + day_boundary),
         cutoff_time=to_local_datetime(
-            latest_date + ' ' + day_boundary) + timedelta(days=1)
+            latest_date + ' ' + day_boundary) + timedelta(days=1),
+        object_type_suffix=object_type_suffix
     )
 
 
@@ -69,7 +71,8 @@ class LoyaltyActivityByDate(TouchBistroObjectList):
         return LoyaltyActivity(
             self._db_location,
             transaction_id=row['ZTRANSACTIONID'],
-            parent=self.parent)
+            parent=self.parent,
+            object_type_suffix=self.object_type_suffix)
 
 
 class LoyaltyActivity(TouchBistroDBObject):

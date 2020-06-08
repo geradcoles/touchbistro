@@ -91,7 +91,8 @@ ORDER_REPORT_FIELDS = {
         'balance_change',
         'account_number',
         'waiter_name',
-        'transaction_id'
+        'transaction_id',
+        'object_type',
     )
 }
 
@@ -99,7 +100,7 @@ ORDER_REPORT_FIELDS = {
 def explode_order_fields():
     "Returns a list of fields reported by explode_order"
     return (
-        'bill_number', 'order_number', 'datetime', 'order_type', 'object_type',
+        'bill_number',  'order_number', 'datetime', 'order_type', 'object_type',
         'bill_waiter', 'party_size',
         'custom_takeout_type', 'discount_type',
         'waiter_name', 'name', 'sales_category', 'quantity', 'price',
@@ -197,9 +198,13 @@ def explode_modifiers(order_basics, modifiers, depth=0):
 def loyalty_report(db_path, earliest_date, latest_date, day_boundary, output,
                    in_csv=False, in_json=False, order_rept=False):
     "Dump loyalty in the specified output format"
+    suffix = ''
+    if order_rept:
+        suffix = 'ReportItem'
     loyalty = get_loyalty_for_date_range(
         db_path, earliest_date=earliest_date,
-        latest_date=latest_date, day_boundary=day_boundary)
+        latest_date=latest_date, day_boundary=day_boundary,
+        object_type_suffix=suffix)
     header = True
     if in_csv:
         fields = explode_loyalty_fields()
