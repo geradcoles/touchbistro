@@ -38,39 +38,39 @@ than using the built-in TouchBistro reports because:
 
 1. It is more accurate - correctly handling situations like:
     
-  - Discounts applied to menu-based modifiers where the sales category does
-    not match that of the parent menu item (a TB bug causes the entire discount
-    amount to be applied to the parent menu item sales category rather than
-    being applied pro-rata to the parent item and its modifiers based on their
-    portion of the total line-item amount -- this is especially bad if the
-    parent menu item costs less than the modifier and a large discount is
-    applied, which could make the parent menu item sales category value go
-    negative and be truncated to $0.00 and discount amounts be "lost").
-    
-  - Discounts being applied by a server against another server's open order.
-    Often these discounts become lost in End of Day totals or result in
-    inaccuracies in cloud reports.
+- Discounts applied to menu-based modifiers where the sales category does
+  not match that of the parent menu item (a TB bug causes the entire discount
+  amount to be applied to the parent menu item sales category rather than
+  being applied pro-rata to the parent item and its modifiers based on their
+  portion of the total line-item amount -- this is especially bad if the
+  parent menu item costs less than the modifier and a large discount is
+  applied, which could make the parent menu item sales category value go
+  negative and be truncated to $0.00 and discount amounts be "lost").
+  
+- Discounts being applied by a server against another server's open order.
+  Often these discounts become lost in End of Day totals or result in
+  inaccuracies in cloud reports.
 
-  - Orders left open with unpaid balances past day end, which add to sales
-    totals on the End of Day report, even without payments. With the ``order
-    report`` command output, these orders can quickly be identified by the
-    discrepancy between their lack of a "Payment" object or balance differences
-    compared to their "OrderById" parent object.
+- Orders left open with unpaid balances past day end, which add to sales
+  totals on the End of Day report, even without payments. With the ``order
+  report`` command output, these orders can quickly be identified by the
+  discrepancy between their lack of a "Payment" object or balance differences
+  compared to their "OrderById" parent object.
 
-  - Deleted discounts sometimes being (incorrectly) synchronized to
-    TouchBistro Cloud and causing reporting errors.
+- Deleted discounts sometimes being (incorrectly) synchronized to
+  TouchBistro Cloud and causing reporting errors.
 
 2. It provides missing visibility by surfacing data that is absent or difficult
 to use in cloud financial reports, like:
 
-    - Number of seats/guests (used to calculate average guest check)
-    - Order types (dine-in, takeout, delivery, bartab, etc)
-    - Custom takeout types
-    - Custom payment types
-    - Discount authorization information (present in the cloud but can't be
-      reported on directly, and buggy)
-    - Loyalty card transactions that did not occur as part of a sale (order),
-      such as adding balance.
+- Number of seats/guests (used to calculate average guest check)
+- Order types (dine-in, takeout, delivery, bartab, etc)
+- Custom takeout types
+- Custom payment types
+- Discount authorization information (present in the cloud but can't be
+  reported on directly, and buggy)
+- Loyalty card transactions that did not occur as part of a sale (order),
+  such as adding balance.
 
 3. Beyond just surfacing data, doing it so in a format suitable for Excel
 pivottables or programmatic access, natively in Python3, or through JSON and
