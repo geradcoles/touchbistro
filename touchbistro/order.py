@@ -445,12 +445,14 @@ class Order(TouchBistroDBObject):
 
         """
         output = super(Order, self).summary()
-        output['gross_sales_by_sales_category'] = \
-            self.gross_sales_by_sales_category()
-        output['discounts_by_sales_category'] = \
-            self.discounts_by_sales_category()
-        output['net_sales_by_sales_category'] = \
+        output['sales_summary'] = {
+            'gross_sales_by_sales_category':
+            self.gross_sales_by_sales_category(),
+            'discounts_by_sales_category':
+            self.discounts_by_sales_category(),
+            'net_sales_by_sales_category':
             self.net_sales_by_sales_category()
+        }
         output['order_items'] = self.order_items.summary()
         output['payments'] = self.payments.summary()
         # these are payment fields that are part of the base order, not from
