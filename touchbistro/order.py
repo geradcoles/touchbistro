@@ -108,8 +108,6 @@ class Order(TouchBistroDBObject):
         'bill_number', 'party_name', 'party_as_split_order',
         'custom_takeout_type', 'waiter_name', 'datetime',
         'subtotal', 'taxes', 'total', 'party_size',
-        'gross_sales_by_sales_category', 'discounts_by_sales_category',
-        'net_sales_by_sales_category'
     ]
 
     #: Query to get as much information about an order as possible based on its
@@ -447,6 +445,12 @@ class Order(TouchBistroDBObject):
 
         """
         output = super(Order, self).summary()
+        output['gross_sales_by_sales_category'] = \
+            self.gross_sales_by_sales_category()
+        output['discounts_by_sales_category'] = \
+            self.discounts_by_sales_category()
+        output['net_sales_by_sales_category'] = \
+            self.net_sales_by_sales_category()
         output['order_items'] = self.order_items.summary()
         output['payments'] = self.payments.summary()
         # these are payment fields that are part of the base order, not from
