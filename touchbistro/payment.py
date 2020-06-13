@@ -8,7 +8,7 @@ from .dates import cocoa_2_datetime
 
 #: This map is used to generate a human-readable name for ZI_TYPE in the
 #: ZPAYMENT table.
-PAYMENT_TYPES = ("Cash", "Electronic", "Unknown", "Unknown", "Unknown",
+PAYMENT_TYPES = ("Cash", "Electronic", "Unknown", "Unknown",
                  "Customer Account")
 
 
