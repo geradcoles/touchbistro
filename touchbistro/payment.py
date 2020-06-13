@@ -200,7 +200,11 @@ class Payment(TouchBistroDBObject):
         if self.payment_type == PAYMENT_TYPES[0]:  # cash
             pay_type = "CASH"
         else:
-            pay_type = self.card_type.upper()
+            try:
+                pay_type = self.card_type.upper()
+            except AttributeError:
+                # no card_type
+                pass
         if self.auth_number:
             pay_type += f" [{self.auth_number}]"
         output = (
