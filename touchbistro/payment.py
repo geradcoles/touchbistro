@@ -165,7 +165,7 @@ class Payment(TouchBistroDBObject):
         """Returns the customer account name from the linked CustomerAccount"""
         try:
             return self.customer_account.name
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, TypeError):
             return None
 
     @property
