@@ -170,7 +170,7 @@ def explode_order(order):
         yield from explode_discounts(order_basics, item)
     for payment in order.payments:
         yield {**order_basics, **get_obj_fields(payment)}
-        if payment.is_loyalty():
+        if payment.is_loyalty:
             yield {**order_basics, **get_obj_fields(payment.loyalty_activity)}
 
 
