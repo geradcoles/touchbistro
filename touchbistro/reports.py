@@ -81,7 +81,7 @@ ORDER_REPORT_FIELDS = {
         'amount',
         'change',
         'balance',
-        'customer_account_id',
+        'customer_account_name',
         'customer_id',
         'card_type',
         'auth_number',
@@ -107,7 +107,7 @@ def explode_order_fields():
         'waiter_name', 'name', 'sales_category', 'quantity', 'price',
         'subtotal', 'taxes', 'total', 'tip', 'amount', 'change', 'balance',
         'payment_type', 'payment_number', 'party_name',
-        'customer_account_id', 'balance_change', 'account_number',
+        'customer_account_name', 'balance_change', 'account_number',
         'was_sent', 'authorizer_name', 'card_type',
         'auth_number', 'table_name',
         'customer_id', 'transaction_id')

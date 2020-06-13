@@ -3,6 +3,7 @@ payments.
 """
 from .base import TouchBistroDBObject, TouchBistroObjectList
 from .loyalty import LoyaltyActivity
+from .customer_account import CustomerAccount
 from .dates import cocoa_2_datetime
 
 
@@ -64,6 +65,7 @@ class Payment(TouchBistroDBObject):
                        'amount', 'tip', 'change', 'balance',
                        'refundable_amount', 'original_payment_uuid',
                        'customer_account_id', 'customer_id',
+                       'customer_account_name',
                        'card_type', 'auth_number', 'datetime',
                        ]
 
@@ -149,6 +151,24 @@ class Payment(TouchBistroDBObject):
         return self.db_results['ZACCOUNT']
 
     @property
+    def customer_account(self):
+        """Returns a :class:`CustomerAccount` corresponding to the account id
+        recorded for the payment"""
+        return CustomerAccount(
+            self._db_location,
+            customer_account_id=self.customer_account_id,
+            parent=self
+        )
+
+    @property
+    def customer_account_name(self):
+        """Returns the customer account name from the linked CustomerAccount"""
+        try:
+            return self.customer_account.name
+        except (AttributeError, KeyError):
+            return None
+
+    @property
     def customer_id(self):
         """Returns the ID of a Customer associated with the payment, if
         present (ZCUSTOMER column)"""
@@ -231,10 +251,13 @@ class Payment(TouchBistroDBObject):
         output += ' ' * 33 + f"Tip:  ${self.tip:3.2f}\n"
         output += ' ' * 19 + f"Remaining Balance:  ${self.balance:3.2f}\n"
         if self.is_loyalty:
-            output += f"            Account #: "
+            output += f"          Account #: "
             output += f"{self.loyalty_activity.account_number}\n"
-            output += f"            Waiter: "
+            output += f"          Waiter:    "
             output += f"{self.loyalty_activity.waiter_name}\n"
+        elif self.is_customer_account:
+            output += "          Account Name: "
+            output += f"{self.customer_account_name}\n"
         return output
 
     def summary(self):
