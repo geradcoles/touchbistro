@@ -51,13 +51,13 @@ class CustomerAccount(TouchBistroDBObject):
     def accounts(self):
         """Returns a foreign key to an accounts table. Based on a column name
         that continues to increment with releases"""
-        for inc in range(100):
-            CustomerAccount.__VERSION += inc
+        for _ in range(100):
             colname = 'Z' + str(CustomerAccount.__VERSION) + 'ACCOUNTS'
             try:
                 return self.db_results[colname]
             except KeyError:
                 pass
+            CustomerAccount.__VERSION += 1
         raise RuntimeError("Can't find a suitable ZXXACCOUNTS column")
 
     @property

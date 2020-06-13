@@ -10,6 +10,7 @@ from .discount import ItemDiscountList
 from .modifier import ItemModifierList, modifier_sales_category_amounts
 from .payment import PaymentGroup
 from .menu import MenuItem
+from .waiter import Waiter
 
 
 def takeout_type_pretty(value):
@@ -92,98 +93,107 @@ class OrderTimeRange(TouchBistroObjectList):
             parent=self.parent)
 
 
-class Order(TouchBistroDBObject):
-    """Get detailed information about an order.
+class Order(TouchBistroObjectList):
+    """Get information about a TouchBistro order based on its public-facing
+    order number. Order is a parent to one or more PaidOrders.
 
     kwargs:
 
     - order_number
+    """
+    QUERY = """SELECT * FROM ZORDER
+        WHERE ZORDERNUMBER = :order_number
+        AND ZPAIDORDER>0 /* not sure what to do with deleted/unpaid splits */
+        ORDER BY ZI_INDEX ASC"""
+    QUERY_BINDING_ATTRIBUTES = ['order_number']
 
-    Results are a multi-column format containing details about the order.
+    @property
+    def order_number(self):
+        """Returns the order number corresponding to this object"""
+        return self.kwargs.get('order_number')
+
+    def _vivify_db_row(self, row):
+        return PaidOrderSplit(
+            self._db_location,
+            paid_order_id=row['ZPAIDORDER'],
+            parent=self)
+
+
+class OrderFromId(Order):
+    """Get a list of splits for an order based on its ID number
+    (not the order number - be careful - this is the Z_PK column). Exaclty
+    the same as Order in terms of methods and attributes.
+
+    kwargs:
+
+    - order_id
+    """
+    QUERY = """SELECT * FROM ZORDER
+        WHERE Z_PK = :order_id
+        AND ZPAIDORDER>0 /* not sure what to do with deleted/unpaid splits */
+        ORDER BY ZI_INDEX ASC
     """
 
+    QUERY_BINDING_ATTRIBUTES = ['order_id']
+
+
+class PaidOrderSplit(TouchBistroDBObject):
+    """This class represents a paid touchbistro order, which can be a single
+    split on a larger order/bill. Pass in the following kwargs:
+
+    - paid_order_id: the id number corresponding to Z_PK in ZPAIDORDER
+    """
+    #: Query to get as much information about an order as possible, including
+    #: joining across the ZCLOSEDTAKEOUT and ZCUSTOMTAKEOUTTYPE tables to
+    #: enrich the results.
+    QUERY = """SELECT
+            ZPAIDORDER.*,
+            ZCUSTOMTAKEOUTTYPE.ZNAME as CUSTOMTAKEOUTTYPE
+        FROM ZPAIDORDER
+        LEFT JOIN ZCLOSEDTAKEOUT ON
+            ZCLOSEDTAKEOUT.Z_PK = ZPAIDORDER.ZCLOSEDTAKEOUT
+        LEFT JOIN ZCUSTOMTAKEOUTTYPE ON
+            ZCUSTOMTAKEOUTTYPE.Z_PK = ZCLOSEDTAKEOUT.ZCUSTOMTAKEOUTTYPE
+        WHERE ZPAIDORDER.Z_PK = :paid_order_id
+    """
+
+    QUERY_BINDING_ATTRIBUTES = ['paid_order_id']
+
     META_ATTRIBUTES = [
-        'outstanding_balance',
+        'outstanding_balance', 'split_number',
         'order_number', 'order_type', 'table_name',
         'bill_number', 'party_name', 'party_as_split_order',
         'custom_takeout_type', 'waiter_name', 'datetime',
         'subtotal', 'taxes', 'total', 'party_size',
     ]
 
-    #: Query to get as much information about an order as possible based on its
-    #: public-facing order ID number.
-    QUERY = """SELECT
-            ZORDER.*,
-            ZPAIDORDER.ZPAYDATE, ZPAIDORDER.ZI_BILLNUMBER,
-            ZPAIDORDER.ZI_GRATUITYBEFORETAX, ZPAIDORDER.ZI_GRATUITY,
-            ZPAIDORDER.ZI_TAX2ONTAX1,
-            ZPAIDORDER.ZI_REDUCEDTAX1, ZPAIDORDER.ZI_REDUCEDTAX1BILLAMOUNT,
-            ZPAIDORDER.ZI_REDUCEDTAX2, ZPAIDORDER.ZI_REDUCEDTAX2BILLAMOUNT,
-            ZPAIDORDER.ZI_REDUCEDTAX3, ZPAIDORDER.ZI_REDUCEDTAX3BILLAMOUNT,
-            ZPAIDORDER.ZI_TAX1, ZPAIDORDER.ZI_TAX2, ZPAIDORDER.ZI_TAX3,
-            ZPAIDORDER.ZLOYALTYCREDITBALANCE, ZPAIDORDER.ZLOYALTYPOINTSBALANCE,
-            ZPAIDORDER.ZOUTSTANDINGBALANCE, ZPAIDORDER.ZLOYALTYACCOUNTNAME,
-            ZPAIDORDER.ZPARTYNAME, ZPAIDORDER.ZTABLENAME,
-            ZPAIDORDER.ZI_GROUPNUMBER,
-            ZPAIDORDER.ZI_PARTYSIZE, ZPAIDORDER.ZI_SPLIT,
-            CASE ZPAIDORDER.ZI_TAKEOUTTYPE
-                WHEN 2
-                    THEN 'bartab'
-                WHEN 1
-                    THEN 'delivery'
-                WHEN 0
-                    THEN 'takeout'
-                ELSE 'dinein'
-            END TAKEOUT_TYPE,
-            ZPAIDORDER.ZBILLRANGE, ZPAIDORDER.ZCLOSEDTAKEOUT,
-            ZPAIDORDER.ZPAYMENTS,
-            ZWAITER.ZDISPLAYNAME AS WAITERNAME,
-            ZWAITER.ZUUID AS WAITER_UUID,
-            ZCUSTOMTAKEOUTTYPE.ZNAME as CUSTOMTAKEOUTTYPE
-        FROM ZORDER
-        LEFT JOIN ZPAIDORDER ON
-            ZPAIDORDER.Z_PK = ZORDER.ZPAIDORDER
-        LEFT JOIN ZCLOSEDTAKEOUT ON
-            ZCLOSEDTAKEOUT.Z_PK = ZPAIDORDER.ZCLOSEDTAKEOUT
-        LEFT JOIN ZCUSTOMTAKEOUTTYPE ON
-            ZCUSTOMTAKEOUTTYPE.Z_PK = ZCLOSEDTAKEOUT.ZCUSTOMTAKEOUTTYPE
-        LEFT JOIN ZWAITER ON
-            ZWAITER.ZUUID = ZPAIDORDER.ZWAITERUUID
-        WHERE ZORDER.ZORDERNUMBER = :order_number
-        ORDER BY ZORDER.Z_PK DESC LIMIT 1 /* there can be more than 1 */
-    """
-    # TODO: the LIMIT 1 is surely a problem that is leading to an oversight of
-    # some sort. Investigate why there are sometimes more than 1 row.
-
-    QUERY_BINDING_ATTRIBUTES = ['order_number']
-
     def __init__(self, db_location, **kwargs):
-        super(Order, self).__init__(db_location, **kwargs)
+        super(PaidOrderSplit, self).__init__(db_location, **kwargs)
         self._order_items = None
         self._payments = None
         self._taxes = None
 
     @property
     def order_number(self):
-        "Return the order number for this order"
-        return self.db_results['ZORDERNUMBER']
+        """Returns the order number from the parent Order object"""
+        return self.parent.order_number
+
+    @property
+    def order_id(self):
+        """The Z_PK Order ID from the parent Order object"""
+        return self.db_results['ZORDER']
 
     @property
     def bill_number(self):
-        "Return the bill number for this order"
+        "Return the bill number for this paid order"
         try:
             return self.db_results['ZI_BILLNUMBER']
         except KeyError:
             return None
 
     @property
-    def party_as_split_order(self):
-        "Return the value of ZPARTYASSPLITORDER for this order"
-        return self.db_results['ZPARTYASSPLITORDER']
-
-    @property
     def party_name(self):
-        "Return the party name for this order"
+        "Return the party name for this paid order"
         try:
             return self.db_results['ZPARTYNAME']
         except KeyError:
@@ -203,21 +213,43 @@ class Order(TouchBistroDBObject):
             return None
 
     @property
+    def split_number(self):
+        """Returns the split number corresponding to this paid order"""
+        return self.db_results['ZI_SPLIT']
+
+    @property
     def datetime(self):
         """Returns a Python Datetime object with local timezone corresponding
-        to the time that the order was paid"""
+        to the time that the order was seated, if available, paid otherwise"""
+        return self.seated_datetime or self.paid_datetime
+
+    @property
+    def seated_datetime(self):
+        """Returns a Python Datetime object with local timezone corresponding
+        to the time that the order was seated, if available, paid otherwise"""
+        try:
+            return cocoa_2_datetime(self.db_results['ZSEATEDDATE'])
+        except TypeError:
+            return None
+
+    @property
+    def paid_datetime(self):
+        """Returns a Python Datetime object with local timezone corresponding
+        to the time that the order was seated, if available, paid otherwise"""
         try:
             return cocoa_2_datetime(self.db_results['ZPAYDATE'])
         except TypeError:
             return None
 
     @property
+    def order_type_id(self):
+        "Returns the value of ZI_TAKEOUTTYPE as an integer (or None)"
+        return self.db_results['ZI_TAKEOUTTYPE']
+
+    @property
     def order_type(self):
         "Returns the order type, aka 'takeout', 'dine-in', 'delivery', etc"
-        try:
-            return self.db_results['TAKEOUT_TYPE']
-        except KeyError:
-            return None
+        return takeout_type_pretty(self.order_type_id)
 
     @property
     def custom_takeout_type(self):
@@ -256,10 +288,24 @@ class Order(TouchBistroDBObject):
         return self.db_results['ZLOYALTYPOINTSBALANCE']
 
     @property
+    def waiter_uuid(self):
+        """Returns the UUID corresponding to the waiter for this PaidOrder"""
+        return self.db_results['ZWAITERUUID']
+
+    @property
+    def waiter(self):
+        """Return a waiter object corresponding to the paid order"""
+        return Waiter(
+            self._db_location,
+            waiter_uuid=self.waiter_uuid,
+            parent=self
+        )
+
+    @property
     def waiter_name(self):
         "Returns the display name of the waiter that closed the bill"
         try:
-            return self.db_results['WAITERNAME']
+            return self.waiter.display_name
         except KeyError:
             return None
 
@@ -291,7 +337,8 @@ class Order(TouchBistroDBObject):
         if self._order_items is None:
             self._order_items = OrderItemList(
                 self._db_location,
-                order_id=self.object_id
+                order_id=self.order_id,
+                parent=self
             )
         return self._order_items
 
@@ -398,8 +445,10 @@ class Order(TouchBistroDBObject):
             datetime = self.datetime.strftime('%Y-%m-%d %I:%M:%S %p')
         except AttributeError:
             datetime = "None"
+        order_number = self.parent.order_number
         output = (
-            f"\n       DETAILS FOR ORDER #{self.order_number}\n\n"
+            f"\n   DETAILS FOR ORDER #{order_number} "
+            f"SPLIT {self.split_number:2d}\n\n"
             f"Order Date/Time:     \t{datetime}\n"
             f"Table Name: {self.table_name}\tParty: {self.party_name} "
             f"[{self.party_size} seat]\n"
@@ -444,7 +493,7 @@ class Order(TouchBistroDBObject):
         - payment: contains a dictionary of payment information for the order
 
         """
-        output = super(Order, self).summary()
+        output = super(PaidOrderSplit, self).summary()
         output['sales_summary'] = {
             'gross_sales_by_sales_category':
             self.gross_sales_by_sales_category(),
@@ -467,58 +516,6 @@ class Order(TouchBistroDBObject):
         return output
 
 
-class OrderFromId(Order):
-    """Get detailed information about an order based on its ID number
-    (not the order number - be careful - this is the Z_PK column)
-
-    kwargs:
-
-    - order_id
-    """
-    QUERY = """SELECT
-        ZORDER.*,
-        ZPAIDORDER.ZPAYDATE, ZPAIDORDER.ZI_BILLNUMBER,
-        ZPAIDORDER.ZI_GRATUITYBEFORETAX, ZPAIDORDER.ZI_GRATUITY,
-        ZPAIDORDER.ZI_TAX2ONTAX1,
-        ZPAIDORDER.ZI_REDUCEDTAX1, ZPAIDORDER.ZI_REDUCEDTAX1BILLAMOUNT,
-        ZPAIDORDER.ZI_REDUCEDTAX2, ZPAIDORDER.ZI_REDUCEDTAX2BILLAMOUNT,
-        ZPAIDORDER.ZI_REDUCEDTAX3, ZPAIDORDER.ZI_REDUCEDTAX3BILLAMOUNT,
-        ZPAIDORDER.ZI_TAX1, ZPAIDORDER.ZI_TAX2, ZPAIDORDER.ZI_TAX3,
-        ZPAIDORDER.ZLOYALTYCREDITBALANCE, ZPAIDORDER.ZLOYALTYPOINTSBALANCE,
-        ZPAIDORDER.ZOUTSTANDINGBALANCE, ZPAIDORDER.ZLOYALTYACCOUNTNAME,
-        ZPAIDORDER.ZPARTYNAME, ZPAIDORDER.ZTABLENAME,
-        ZPAIDORDER.ZI_GROUPNUMBER,
-        ZPAIDORDER.ZI_PARTYSIZE, ZPAIDORDER.ZI_SPLIT,
-        CASE ZPAIDORDER.ZI_TAKEOUTTYPE
-            WHEN 2
-                THEN 'bartab'
-            WHEN 1
-                THEN 'delivery'
-            WHEN 0
-                THEN 'takeout'
-            ELSE 'dinein'
-        END TAKEOUT_TYPE,
-        ZPAIDORDER.ZBILLRANGE, ZPAIDORDER.ZCLOSEDTAKEOUT,
-        ZPAIDORDER.ZPAYMENTS,
-        ZWAITER.ZDISPLAYNAME AS WAITERNAME,
-        ZWAITER.ZUUID AS WAITER_UUID,
-        ZCUSTOMTAKEOUTTYPE.ZNAME as CUSTOMTAKEOUTTYPE
-    FROM ZORDER
-    LEFT JOIN ZPAIDORDER ON
-        ZPAIDORDER.Z_PK = ZORDER.ZPAIDORDER
-    LEFT JOIN ZCLOSEDTAKEOUT ON
-        ZCLOSEDTAKEOUT.Z_PK = ZPAIDORDER.ZCLOSEDTAKEOUT
-    LEFT JOIN ZCUSTOMTAKEOUTTYPE ON
-        ZCUSTOMTAKEOUTTYPE.Z_PK = ZCLOSEDTAKEOUT.ZCUSTOMTAKEOUTTYPE
-    LEFT JOIN ZWAITER ON
-        ZWAITER.ZUUID = ZPAIDORDER.ZWAITERUUID
-    WHERE ZORDER.Z_PK = :order_id
-    ORDER BY ZORDER.Z_PK DESC LIMIT 1
-    """
-
-    QUERY_BINDING_ATTRIBUTES = ['order_id']
-
-
 class OrderItemList(TouchBistroObjectList):
     """Use this class to get a list of items for an order.
     It behaves like a sequence, where you can simply iterate over the object,
@@ -529,10 +526,13 @@ class OrderItemList(TouchBistroObjectList):
     """
     #: The ORDERITEMS table has a version number that changes with each
     #: release. Unfortunately the version also changes column names while the
-    #: structure seems to stay identical.
-    BASE_ID = 54
+    #: structure seems to stay identical. This class variable will be
+    #: incremented from the base value set below until we find a table version
+    #: or run out of attempts. If we succeed, subsequent uses of the class
+    #: will start at the correct version and not need subsequent attempts.
+    __TBL_VERSION = 54
     #: Number of incremental attempts to get data out of this table.
-    ATTEMPTS = 20
+    ATTEMPTS = 100
 
     #: This query results in a list of order item ID numbers (foreign key into
     #: the ZORDERITEM table)
@@ -562,16 +562,19 @@ class OrderItemList(TouchBistroObjectList):
     def _fetch_from_db(self):
         """Returns the db result rows for the QUERY"""
         last_err = None
-        for offset in range(self.ATTEMPTS):
+        for _ in range(self.ATTEMPTS):
             try:
-                tbl_id = self.BASE_ID + offset
-                col_id = tbl_id + 1
+                query = self.QUERY.format(
+                    tbl_id=OrderItemList.__TBL_VERSION,
+                    col_id=OrderItemList.__TBL_VERSION + 1)
+                self.log.debug((query, self.bindings))
                 return self.db_handle.cursor().execute(
-                    self.QUERY.format(
-                        tbl_id=tbl_id, col_id=col_id), self.bindings
+                    query,
+                    self.bindings
                 ).fetchall()
             except sqlite3.OperationalError as err:
                 last_err = err
+            OrderItemList.__TBL_VERSION += 1
         raise last_err
 
 

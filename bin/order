@@ -32,32 +32,34 @@ from touchbistro.reports import (
 )
 
 
-def write_order(args, order, output):
+def write_order(args, order_list, output):
     "Dump an order in the specified output format"
-    if args.get('--csv'):
-        write_order_to_csv(output, order)
-    elif args.get('--json'):
-        json.dump(
-            order.summary(), output, indent=4,
-            sort_keys=True, default=str)
-    else:
-        output.writelines(order.receipt_form())
-
-
-def write_orders(args, orders, output):
-    "Dump orders in the specified output format"
-    if args.get('--csv'):
-        write_orders_to_csv(output, orders)
-    elif args.get('--json'):
-        for item in orders:
-            if output == sys.stdout:
-                print(json.dumps(
-                    item, indent=4, sort_keys=True, default=str))
-            else:
-                json.dump(item, output, sort_keys=True, default=str)
-    else:
-        for order in orders:
+    for order in order_list:
+        if args.get('--csv'):
+            write_order_to_csv(output, order)
+        elif args.get('--json'):
+            json.dump(
+                order.summary(), output, indent=4,
+                sort_keys=True, default=str)
+        else:
             output.writelines(order.receipt_form())
+
+
+def write_orders(args, order_list, output):
+    "Dump orders in the specified output format"
+    for orders in order_list:
+        if args.get('--csv'):
+            write_orders_to_csv(output, orders)
+        elif args.get('--json'):
+            for item in orders:
+                if output == sys.stdout:
+                    print(json.dumps(
+                        item, indent=4, sort_keys=True, default=str))
+                else:
+                    json.dump(item, output, sort_keys=True, default=str)
+        else:
+            for order in orders:
+                output.writelines(order.receipt_form())
 
 
 if __name__ == '__main__':

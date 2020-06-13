@@ -17,9 +17,9 @@ REPORTED_OBJECTS = (
     Order, OrderItem, ItemDiscount, ItemModifier, Payment
 )
 
-#: These fields from a top-level Order object will always be output
+#: These fields from a top-level PaidOrder object will always be output
 ORDER_BASIC_FIELDS = ['bill_number', 'order_number', 'order_type',
-                      'custom_takeout_type']
+                      'custom_takeout_type', 'split_number', 'table_name']
 
 #: Define the attributes to include in order reports
 ORDER_REPORT_FIELDS = {
@@ -28,6 +28,7 @@ ORDER_REPORT_FIELDS = {
         'party_name',
         'party_size',
         'custom_takeout_type',
+        'split_number',
         'waiter_name',
         'datetime',
         'subtotal',
@@ -40,6 +41,7 @@ ORDER_REPORT_FIELDS = {
         'party_name',
         'party_size',
         'custom_takeout_type',
+        'split_number',
         'waiter_name',
         'datetime',
         'subtotal',
@@ -82,7 +84,6 @@ ORDER_REPORT_FIELDS = {
         'change',
         'balance',
         'customer_account_name',
-        'customer_id',
         'card_type',
         'auth_number',
         'object_type',
@@ -101,16 +102,17 @@ ORDER_REPORT_FIELDS = {
 def explode_order_fields():
     "Returns a list of fields reported by explode_order"
     return (
-        'bill_number', 'order_number', 'datetime', 'order_type',
-        'object_type', 'bill_waiter', 'party_size',
-        'custom_takeout_type', 'discount_type',
+        'bill_number', 'order_number', 'object_type',
+        'datetime', 'split_number',
+        'order_type', 'custom_takeout_type',
+        'bill_waiter', 'discount_type',
         'waiter_name', 'name', 'sales_category', 'quantity', 'price',
         'subtotal', 'taxes', 'total', 'tip', 'amount', 'change', 'balance',
         'payment_type', 'payment_number', 'party_name',
         'customer_account_name', 'balance_change', 'account_number',
         'was_sent', 'authorizer_name', 'card_type',
-        'auth_number', 'table_name',
-        'customer_id', 'transaction_id')
+        'auth_number', 'table_name', 'party_size',
+        'transaction_id')
 
 
 def explode_loyalty_fields():
@@ -136,7 +138,7 @@ def get_obj_fields(obj):
     return output
 
 
-def explode_order(order):
+def explode_order(order_list):
     """Given an Order object, break it down into an iterable of dictionaries
     for every order line item, discount, and modifier. Each row will contain
     a subset of dict keys appropriate for that item type. A column called
@@ -154,24 +156,26 @@ def explode_order(order):
     it may be confusing because every object also has 'uuid' in its list of
     META_ATTRIBUTES, which will overwrite the order's uuid for that row.
     """
-    order_basics = dict()
-    for field in ORDER_BASIC_FIELDS:
-        order_basics[field] = getattr(order, field)
-    # add this here because we don't want to lose the waiter_name from line
-    order_basics['bill_waiter'] = order.waiter_name
-    yield {**order_basics, **get_obj_fields(order)}
-    for item in order.order_items:
-        if item.was_voided():
-            # voided items have sales associated with categories, and discounts
-            # as well, which will cause reporting errors if allowed through.
-            continue
-        yield {**order_basics, **get_obj_fields(item)}
-        yield from explode_modifiers(order_basics, item.modifiers)
-        yield from explode_discounts(order_basics, item)
-    for payment in order.payments:
-        yield {**order_basics, **get_obj_fields(payment)}
-        if payment.is_loyalty:
-            yield {**order_basics, **get_obj_fields(payment.loyalty_activity)}
+    for order in order_list:
+        order_basics = dict()
+        for field in ORDER_BASIC_FIELDS:
+            order_basics[field] = getattr(order, field)
+        # add this here because we don't want to lose the waiter_name from line
+        order_basics['bill_waiter'] = order.waiter_name
+        yield {**order_basics, **get_obj_fields(order)}
+        for item in order.order_items:
+            if item.was_voided():
+                # voided items have sales associated with categories, discounts
+                # as well, which will cause reporting errors if allowed through
+                continue
+            yield {**order_basics, **get_obj_fields(item)}
+            yield from explode_modifiers(order_basics, item.modifiers)
+            yield from explode_discounts(order_basics, item)
+        for payment in order.payments:
+            yield {**order_basics, **get_obj_fields(payment)}
+            if payment.is_loyalty:
+                yield {**order_basics, **get_obj_fields(
+                    payment.loyalty_activity)}
 
 
 def explode_discounts(order_basics, item):
