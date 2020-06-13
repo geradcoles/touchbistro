@@ -186,8 +186,8 @@ to the default, receipt-like view of an order::
 As you can see in the above example, the order details are shown at the top,
 then line items with any discounts or modifiers, including a broken out 
 subtotal per line item, making it easier to understand what's going on with
-modifiers and discounts. Next, we have the order subtotal and tax amount
-(tax is not working yet), followed by the order total amount.
+modifiers and discounts. Next, we have the order subtotal and tax amount,
+followed by the order total amount.
 
 The next section of the receipt format contains a list of every payment applied
 to the order, in the order that they occurred. The payment type is always
@@ -263,7 +263,7 @@ Any help maintaining this module is welcome! Keep in mind that we wrote this
 library with a specific operational need (and urgency) in mind, so it is
 lacking many of the wonderful things we've come to expect from modern Python
 modules, like tests, a Sphynx build, etc. CLI commands do not perform any
-input validation. Pointing the command at a non-existent path for the Sqlite3
+input validation. Pointing a command at a non-existent path for the Sqlite3
 database results in a new one being created there.
 
 There's also a lot of room for
@@ -275,7 +275,7 @@ accounts are still only supported when used for payments, but none of the
 pay in/out information (when done directly from the Customer Account admin
 area) is reported, whereas it is included for Loyalty. We would also like to
 continue building the ``changelog`` module, which is only half-working at the
-moment. Menu items are supported by not menu categories, and much can be done
+moment. Menu items are supported but not menu categories, and much can be done
 to improve that side of things.
 
 Please submit a pull request for any ideas for code enhancements or fixes to
