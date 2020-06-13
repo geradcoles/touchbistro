@@ -18,7 +18,7 @@ REPORTED_OBJECTS = (
 )
 
 #: These fields from a top-level Order object will always be output
-ORDER_BASIC_FIELDS = ['bill_number', 'order_number', 'order_type'
+ORDER_BASIC_FIELDS = ['bill_number', 'order_number', 'order_type',
                       'custom_takeout_type']
 
 #: Define the attributes to include in order reports
