@@ -176,6 +176,7 @@ class Payment(TouchBistroDBObject):
             except AttributeError:
                 return None
 
+    @property
     def is_loyalty(self):
         """Returns true if this was a loyalty-type payment"""
         if self.card_type == 'Loyalty':
@@ -183,10 +184,25 @@ class Payment(TouchBistroDBObject):
         return False
 
     @property
+    def is_customer_account(self):
+        """Returns true if this was a customer account payment"""
+        return self.payment_type_id == 4
+
+    @property
+    def is_cash(self):
+        """Returns true if the customer paid cash"""
+        return self.payment_type_id == 0
+
+    @property
+    def is_electronic(self):
+        """Returns true if this was an electronic payment, including Loyalty"""
+        return self.payment_type_id == 1
+
+    @property
     def loyalty_activity(self):
         """Returns a LoyaltyActivity object for loyalty-type transactions,
         None otherwise"""
-        if self.is_loyalty():
+        if self.is_loyalty:
             return LoyaltyActivity(
                 self._db_location,
                 transaction_id=self.auth_number,
@@ -197,30 +213,28 @@ class Payment(TouchBistroDBObject):
     def receipt_form(self):
         """Output payment info in a form suitable for receipts"""
         pay_type = ""
-        if self.payment_type == PAYMENT_TYPES[0]:  # cash
+        if self.is_cash:
             pay_type = "CASH"
-        else:
+        elif self.is_electronic:
             try:
                 pay_type = self.card_type.upper()
             except AttributeError:
-                # no card_type
-                pass
-        if self.auth_number:
-            pay_type += f" [{self.auth_number}]"
+                pay_type = "UnknownCardType"
+            if self.auth_number:
+                pay_type += f" [{self.auth_number}]"
+        elif self.is_customer_account:
+            pay_type = f"CUSTOMER ACCT. [{self.customer_account_id}]"
         output = (
             f"Payment {self.payment_number:2d}: {pay_type:20s} "
             '      ' + f"${self.amount:3.2f}\n"
         )
         output += ' ' * 33 + f"Tip:  ${self.tip:3.2f}\n"
         output += ' ' * 19 + f"Remaining Balance:  ${self.balance:3.2f}\n"
-        if self.payment_type == PAYMENT_TYPES[4]:  # customer account
-            cust_acct_info = f"  Account ID: {self.customer_account_id:6d}"
-            output += f"{cust_acct_info:>45}\n"
-        elif self.is_loyalty():
-            output += f"                   Account #: "
+        if self.is_loyalty:
+            output += f"            Account #: "
             output += f"{self.loyalty_activity.account_number}\n"
-            output += f"                   [Waiter: "
-            output += f"{self.loyalty_activity.waiter_name}]\n"
+            output += f"            Waiter: "
+            output += f"{self.loyalty_activity.waiter_name}\n"
         return output
 
     def summary(self):
