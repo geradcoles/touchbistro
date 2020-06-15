@@ -249,6 +249,8 @@ class Payment(TouchBistroDBObject):
             '      ' + f"${self.amount:3.2f}\n"
         )
         output += ' ' * 33 + f"Tip:  ${self.tip:3.2f}\n"
+        if self.change:
+            output += ' ' * 30 + f"Change:  ${self.change:3.2f}\n"
         output += ' ' * 19 + f"Remaining Balance:  ${self.balance:3.2f}\n"
         if self.is_loyalty:
             output += f"          Account #: "
