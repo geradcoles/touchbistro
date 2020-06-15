@@ -124,6 +124,12 @@ class TouchBistroObjectList(TouchBistroDBQueryResult):
             output.append(item.summary())
         return output
 
+    def extend(self, other):
+        """Allow this list to be extended with items from another, if they are
+        the same kind"""
+        assert isinstance(other, self.__class__)
+        self.items.extend(other.items)
+
     def _vivify_db_row(self, row):
         """Implement in a subclass to provide mechanism to convert a db row
         into the object type returned by items() above."""
@@ -141,6 +147,13 @@ class TouchBistroObjectList(TouchBistroDBQueryResult):
     def __getitem__(self, key):
         "Return the item at index key"
         return self.items[key]
+
+    def __add__(self, other):
+        """Allow adding two items together (if they are the same kind).
+        The second item's list will be appended to the end of the current
+        item's."""
+        assert isinstance(other, self.__class__)
+        return self.items + other.items
 
     def __str__(self):
         "Return a string-formatted version of this object"
