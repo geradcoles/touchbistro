@@ -30,7 +30,9 @@ ZI_TAKEOUTTYPE_MAP = {
     None: 'dinein',
     0: 'takeout',
     1: 'delivery',
-    2: 'bartab'
+    2: 'bartab',
+    3: 'unknown',
+    4: 'onlineorder'
 }
 
 
