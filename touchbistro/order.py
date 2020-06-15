@@ -13,6 +13,14 @@ from .menu import MenuItem
 from .waiter import Waiter
 
 
+def center(text, width, symbol=' '):
+    """Center-pad a string within the given width using the given symbol"""
+    pad = width - len(text)
+    lpad = round(pad/2)
+    rpad = pad - lpad
+    return symbol * lpad + text + symbol * rpad
+
+
 def takeout_type_pretty(value):
     "Returns a friendly takeout type from a mapped value"
     return ZI_TAKEOUTTYPE_MAP[value]
@@ -460,12 +468,11 @@ class PaidOrderSplit(TouchBistroDBObject):
         except AttributeError:
             datetime = "None"
         order_number = self.parent.order_number
-        output = f"\n   DETAILS FOR ORDER #{order_number}"
+        header = f"DETAILS FOR ORDER #{order_number}"
         if self.split_by > 1:
-            output += f" SPLIT {self.split_number} of {self.split_by}\n\n"
-        else:
-            output += "\n\n"
-        output += (
+            header += f" SPLIT {self.split_number} of {self.split_by}"
+        output = (
+            "\n" + center(header, 47) + "\n\n"
             f"Order Date/Time:     \t{datetime}\n"
             f"Table Name: {self.table_name}\tParty: {self.party_name} "
             f"[{self.party_size} seat]\n"
