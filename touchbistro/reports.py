@@ -3,7 +3,7 @@
 import sys
 import csv
 import json
-from .order import Order, OrderFromId, OrderItem
+from .order import PaidOrderSplit, OrderItem
 from .discount import ItemDiscount
 from .modifier import ItemModifier
 from .payment import Payment
@@ -14,7 +14,7 @@ CSV_DATE_FORM = '%Y-%m-%d %I:%M:%S %p'
 
 
 REPORTED_OBJECTS = (
-    Order, OrderItem, ItemDiscount, ItemModifier, Payment
+    PaidOrderSplit, OrderItem, ItemDiscount, ItemModifier, Payment
 )
 
 #: These fields from a top-level PaidOrder object will always be output
@@ -23,20 +23,7 @@ ORDER_BASIC_FIELDS = ['bill_number', 'order_number', 'order_type',
 
 #: Define the attributes to include in order reports
 ORDER_REPORT_FIELDS = {
-    Order: (
-        'table_name',
-        'party_name',
-        'party_size',
-        'custom_takeout_type',
-        'split_number',
-        'waiter_name',
-        'datetime',
-        'subtotal',
-        'taxes',
-        'total',
-        'object_type',
-    ),
-    OrderFromId: (
+    PaidOrderSplit: (
         'table_name',
         'party_name',
         'party_size',
@@ -138,7 +125,7 @@ def get_obj_fields(obj):
     return output
 
 
-def explode_order(order_list):
+def explode_order(order):
     """Given an Order object, break it down into an iterable of dictionaries
     for every order line item, discount, and modifier. Each row will contain
     a subset of dict keys appropriate for that item type. A column called
@@ -156,26 +143,25 @@ def explode_order(order_list):
     it may be confusing because every object also has 'uuid' in its list of
     META_ATTRIBUTES, which will overwrite the order's uuid for that row.
     """
-    for order in order_list:
-        order_basics = dict()
-        for field in ORDER_BASIC_FIELDS:
-            order_basics[field] = getattr(order, field)
-        # add this here because we don't want to lose the waiter_name from line
-        order_basics['bill_waiter'] = order.waiter_name
-        yield {**order_basics, **get_obj_fields(order)}
-        for item in order.order_items:
-            if item.was_voided():
-                # voided items have sales associated with categories, discounts
-                # as well, which will cause reporting errors if allowed through
-                continue
-            yield {**order_basics, **get_obj_fields(item)}
-            yield from explode_modifiers(order_basics, item.modifiers)
-            yield from explode_discounts(order_basics, item)
-        for payment in order.payments:
-            yield {**order_basics, **get_obj_fields(payment)}
-            if payment.is_loyalty:
-                yield {**order_basics, **get_obj_fields(
-                    payment.loyalty_activity)}
+    order_basics = dict()
+    for field in ORDER_BASIC_FIELDS:
+        order_basics[field] = getattr(order, field)
+    # add this here because we don't want to lose the waiter_name from line
+    order_basics['bill_waiter'] = order.waiter_name
+    yield {**order_basics, **get_obj_fields(order)}
+    for item in order.order_items:
+        if item.was_voided():
+            # voided items have sales associated with categories, discounts
+            # as well, which will cause reporting errors if allowed through
+            continue
+        yield {**order_basics, **get_obj_fields(item)}
+        yield from explode_modifiers(order_basics, item.modifiers)
+        yield from explode_discounts(order_basics, item)
+    for payment in order.payments:
+        yield {**order_basics, **get_obj_fields(payment)}
+        if payment.is_loyalty:
+            yield {**order_basics, **get_obj_fields(
+                payment.loyalty_activity)}
 
 
 def explode_discounts(order_basics, item):
