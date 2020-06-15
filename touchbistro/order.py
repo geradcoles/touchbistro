@@ -295,6 +295,13 @@ class PaidOrderSplit(TouchBistroDBObject):
         return self.db_results['ZPAYMENTS']
 
     @property
+    def table_order_id(self):
+        """Depending on how splits are closed, the ZTABLEORDER column may be
+        populated with another ZORDER order id that contains additional order
+        line items, this is the ID for that order."""
+        return self.db_results['ZTABLEORDER']
+
+    @property
     def outstanding_balance(self):
         """Returns the outstanding balance amount for the order"""
         return self.db_results['ZOUTSTANDINGBALANCE']
@@ -370,6 +377,13 @@ class PaidOrderSplit(TouchBistroDBObject):
                 order_id=self.order_id,
                 parent=self
             )
+            if self.table_order_id:
+                self._order_items.extend(
+                    OrderItemList(
+                        self._db_location,
+                        order_id=self.table_order_id,
+                        parent=self
+                    ))
         return self._order_items
 
     @property
