@@ -128,7 +128,7 @@ class Order(TouchBistroObjectList):
             paid_order_id=row['ZPAIDORDER'],
             order_number=row['ZORDERNUMBER'],
             split_id=row['ZI_INDEX'],
-            split_by=row['ZI_SPLITBY'],  # unnecessary but here for debugging
+            table_split_by=row['ZI_SPLITBY'],
             parent=self)
 
 
@@ -162,6 +162,7 @@ class PaidOrderSplit(TouchBistroDBObject):
 
     - paid_order_id: the id number corresponding to Z_PK in ZPAIDORDER
     - order_number: the public facing number for the order (from Order)
+    - table_split_by: from the parent row in ZORDER (ZI_SPLITBY)
     - split_id
     """
     #: Query to get as much information about an order as possible, including
@@ -184,8 +185,8 @@ class PaidOrderSplit(TouchBistroDBObject):
         'outstanding_balance', 'split_number',
         'order_number', 'order_type', 'table_name',
         'bill_number', 'party_name', 'split_by',
-        'custom_takeout_type', 'waiter_name', 'datetime',
-        'subtotal', 'taxes', 'total', 'party_size',
+        'custom_takeout_type', 'waiter_name', 'paid_datetime',
+        'subtotal', 'taxes', 'total', 'party_size', 'seated_datetime'
     ]
 
     def __init__(self, db_location, **kwargs):
@@ -193,6 +194,7 @@ class PaidOrderSplit(TouchBistroDBObject):
         self._paid_order_id = kwargs.get('paid_order_id')
         self._order_number = kwargs.get('order_number')
         self._split_id = kwargs.get('split_id')
+        self._table_split_by = kwargs.get('table_split_by')
         self._order_items = None
         self._payments = None
         self._taxes = None
@@ -239,10 +241,17 @@ class PaidOrderSplit(TouchBistroDBObject):
     @property
     def split_by(self):
         """Returns the number of ways this order was split for payment"""
+        # return self._split_by
         if self.db_results['ZI_SPLIT']:
             return self.db_results['ZI_SPLIT']
         # orders that have no splits return 0 for ZI_SPLIT instead of 1
         return 1
+
+    @property
+    def table_split_by(self):
+        """For order line items that are brought in from a table split, return
+        the number of ways to split the item (from ZORDER, ZI_SPLITBY)"""
+        return self._table_split_by
 
     @property
     def split_number(self):
@@ -253,7 +262,9 @@ class PaidOrderSplit(TouchBistroDBObject):
     def datetime(self):
         """Returns a Python Datetime object with local timezone corresponding
         to the time that the order was seated, if available, paid otherwise"""
-        return self.seated_datetime or self.paid_datetime
+        # can't use seated datetime because registers are often opened and
+        # reused, so order subtotals show up on wrong dates.
+        return self.paid_datetime
 
     @property
     def seated_datetime(self):
@@ -384,6 +395,7 @@ class PaidOrderSplit(TouchBistroDBObject):
                     OrderItemList(
                         self._db_location,
                         order_id=self.table_order_id,
+                        table_split=True,
                         parent=self
                     ))
         return self._order_items
@@ -570,6 +582,8 @@ class OrderItemList(TouchBistroObjectList):
 
     kwargs:
         - order_id
+        - table_split (optional, defaults to False) set true for order items
+          brought in through the ZTABLEORDER column in ZPAIDORDER.
     """
     #: The ORDERITEMS table has a version number that changes with each
     #: release. Unfortunately the version also changes column names while the
@@ -606,6 +620,7 @@ class OrderItemList(TouchBistroObjectList):
         return OrderItem(
             self._db_location,
             order_item_id=row['ORDERITEM_ID'],
+            table_split=self.kwargs.get('table_split', False),
             parent=self.parent)
 
     def _fetch_from_db(self):
@@ -632,6 +647,8 @@ class OrderItem(TouchBistroDBObject):
     kwargs:
 
     - order_item_id (int) - primary key to the ZORDERITEM table.
+    - table_split: if set true, assume this item is split across a table when
+      determining item quantities.
 
     Results are a multi-column format containing details about the item.
     """
@@ -653,6 +670,7 @@ class OrderItem(TouchBistroDBObject):
 
     def __init__(self, db_location, **kwargs):
         super(OrderItem, self).__init__(db_location, **kwargs)
+        self._table_split = kwargs.get('table_split', False)
         self._discounts = None
         self._modifiers = None
         self._menu_item = None
@@ -660,18 +678,20 @@ class OrderItem(TouchBistroDBObject):
     @property
     def quantity(self):
         "Return the quantity associated with the order line item"
+        split_by = self.parent.split_by
+        if self._table_split:
+            split_by = self.parent.table_split_by
         try:
-            return self.db_results['ZI_QUANTITY'] / self.parent.split_by
+            return self.db_results['ZI_QUANTITY'] / split_by
         except ZeroDivisionError:
             return 1
 
     @property
     def open_price(self):
         "Return the open price for the menu item (if applicable)"
-        try:
-            return self.db_results['ZI_OPENPRICE'] / self.parent.split_by
-        except ZeroDivisionError:
-            return 1
+        # TODO: Find orders with open items to determine how this works with
+        # quantity multipliers and splits, if possible.
+        return self.db_results['ZI_OPENPRICE']
 
     @property
     def waiter_name(self):
