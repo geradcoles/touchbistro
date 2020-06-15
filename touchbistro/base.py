@@ -141,3 +141,12 @@ class TouchBistroObjectList(TouchBistroDBQueryResult):
     def __getitem__(self, key):
         "Return the item at index key"
         return self.items[key]
+
+    def __str__(self):
+        "Return a string-formatted version of this object"
+        return (
+            f"{self.__class__.__name__}("
+            f"len: {self.__len__()}, "
+            f"args: {self.kwargs}"
+            f")"
+        )
