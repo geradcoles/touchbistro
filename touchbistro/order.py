@@ -116,6 +116,8 @@ class Order(TouchBistroObjectList):
         return PaidOrderSplit(
             self._db_location,
             paid_order_id=row['ZPAIDORDER'],
+            split_id=row['ZI_INDEX'],
+            split_by=row['ZI_SPLITBY'],
             parent=self)
 
 
@@ -142,6 +144,8 @@ class PaidOrderSplit(TouchBistroDBObject):
     split on a larger order/bill. Pass in the following kwargs:
 
     - paid_order_id: the id number corresponding to Z_PK in ZPAIDORDER
+    - split_id
+    - split_by
     """
     #: Query to get as much information about an order as possible, including
     #: joining across the ZCLOSEDTAKEOUT and ZCUSTOMTAKEOUTTYPE tables to
@@ -162,7 +166,7 @@ class PaidOrderSplit(TouchBistroDBObject):
     META_ATTRIBUTES = [
         'outstanding_balance', 'split_number',
         'order_number', 'order_type', 'table_name',
-        'bill_number', 'party_name', 'party_as_split_order',
+        'bill_number', 'party_name', 'split_by',
         'custom_takeout_type', 'waiter_name', 'datetime',
         'subtotal', 'taxes', 'total', 'party_size',
     ]
@@ -213,9 +217,19 @@ class PaidOrderSplit(TouchBistroDBObject):
             return None
 
     @property
+    def split_by(self):
+        """Returns the number of ways this order was split for payment"""
+        # TODO: This is only here to test an assumption, remove before commit
+        assert self.db_results['ZI_SPLIT'] == int(self.kwargs['split_by'])
+        if self.db_results['ZI_SPLIT']:
+            return self.db_results['ZI_SPLIT']
+        # orders that have no splits return 0 for ZI_SPLIT instead of 1
+        return 1
+
+    @property
     def split_number(self):
-        """Returns the split number corresponding to this paid order"""
-        return self.db_results['ZI_SPLIT']
+        """Returns the split id passed into this object + 1"""
+        return self.kwargs.get('split_id') + 1
 
     @property
     def datetime(self):
@@ -446,9 +460,12 @@ class PaidOrderSplit(TouchBistroDBObject):
         except AttributeError:
             datetime = "None"
         order_number = self.parent.order_number
-        output = (
-            f"\n   DETAILS FOR ORDER #{order_number} "
-            f"SPLIT {self.split_number:2d}\n\n"
+        output = f"\n   DETAILS FOR ORDER #{order_number}"
+        if self.split_by > 1:
+            output += f" SPLIT {self.split_number} of {self.split_by}\n\n"
+        else:
+            output += "\n\n"
+        output += (
             f"Order Date/Time:     \t{datetime}\n"
             f"Table Name: {self.table_name}\tParty: {self.party_name} "
             f"[{self.party_size} seat]\n"
@@ -557,7 +574,9 @@ class OrderItemList(TouchBistroObjectList):
     def _vivify_db_row(self, row):
         "Convert a DB row into an OrderItem"
         return OrderItem(
-            self._db_location, order_item_id=row['ORDERITEM_ID'])
+            self._db_location,
+            order_item_id=row['ORDERITEM_ID'],
+            parent=self.parent)
 
     def _fetch_from_db(self):
         """Returns the db result rows for the QUERY"""
@@ -567,7 +586,6 @@ class OrderItemList(TouchBistroObjectList):
                 query = self.QUERY.format(
                     tbl_id=OrderItemList.__TBL_VERSION,
                     col_id=OrderItemList.__TBL_VERSION + 1)
-                self.log.debug((query, self.bindings))
                 return self.db_handle.cursor().execute(
                     query,
                     self.bindings
@@ -612,12 +630,18 @@ class OrderItem(TouchBistroDBObject):
     @property
     def quantity(self):
         "Return the quantity associated with the order line item"
-        return self.db_results['ZI_QUANTITY']
+        try:
+            return self.db_results['ZI_QUANTITY'] / self.parent.split_by
+        except ZeroDivisionError:
+            return 1
 
     @property
     def open_price(self):
         "Return the open price for the menu item (if applicable)"
-        return self.db_results['ZI_OPENPRICE']
+        try:
+            return self.db_results['ZI_OPENPRICE'] / self.parent.split_by
+        except ZeroDivisionError:
+            return 1
 
     @property
     def waiter_name(self):
@@ -711,8 +735,11 @@ class OrderItem(TouchBistroDBObject):
         """
         output = ""
         name = ""
-        if self.quantity > 1:
-            name += f"{self.quantity:.0f} x "
+        qty = f"{self.quantity:0.2f}".rstrip('0.')
+        # if self.quantity % 1 > 0.0:
+        #    name += f"{self.quantity:.2f} x "
+        if self.quantity != 1:
+            name += f"{qty} x "
         name += self.menu_item.name
         output += "{:38s} ${:3.2f}\n".format(
             name, self.price)
