@@ -125,7 +125,7 @@ class Order(TouchBistroObjectList):
             self._db_location,
             paid_order_id=row['ZPAIDORDER'],
             split_id=row['ZI_INDEX'],
-            split_by=row['ZI_SPLITBY'],
+            split_by=row['ZI_SPLITBY'],  # unnecessary but here for debugging
             parent=self)
 
 
@@ -153,7 +153,6 @@ class PaidOrderSplit(TouchBistroDBObject):
 
     - paid_order_id: the id number corresponding to Z_PK in ZPAIDORDER
     - split_id
-    - split_by
     """
     #: Query to get as much information about an order as possible, including
     #: joining across the ZCLOSEDTAKEOUT and ZCUSTOMTAKEOUTTYPE tables to
@@ -227,8 +226,6 @@ class PaidOrderSplit(TouchBistroDBObject):
     @property
     def split_by(self):
         """Returns the number of ways this order was split for payment"""
-        # TODO: This is only here to test an assumption, remove before commit
-        assert self.db_results['ZI_SPLIT'] == int(self.kwargs['split_by'])
         if self.db_results['ZI_SPLIT']:
             return self.db_results['ZI_SPLIT']
         # orders that have no splits return 0 for ZI_SPLIT instead of 1
