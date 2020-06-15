@@ -55,7 +55,7 @@ than using the built-in TouchBistro reports because:
   totals on the End of Day report, even without payments. With the ``order
   report`` command output, these orders can quickly be identified by the
   discrepancy between their lack of a "Payment" object or balance differences
-  compared to their "OrderById" parent object.
+  compared to their "PaidOrderSplit" parent object.
 
 - Deleted discounts sometimes being (incorrectly) synchronized to
   TouchBistro Cloud and causing reporting errors.
@@ -216,11 +216,16 @@ This can all happen programmatically like this::
 
     from touchbistro.orders import Order
     order = Order('/path/to/Restaurant.sql', order_number=12345)
-    details = order.summary() # get the same dict exposed with --json above
-    # OR with methods and attributes like:
-    print(order.subtotal())
-    for payment in order.payments:
-        print(f"Payment {payment.payment_number}: ${payment.amount:3.2f}")
+    for split in order:
+        print(split.summary()) # same dict exposed with --json above
+        print(split.receipt_form()) # receipt-version show above
+        # or, getting into the object api:
+        for item in split.order_items:
+            print(f"{item.name} ${item.price:0.2f}\n")
+            # also has discounts, modifiers as available nested objects
+        print(split.subtotal())
+        for pmt in split.payments:
+            print(f"Payment {pmt.payment_number}: ${pmt.amount:3.2f}\n")
 
 
 Paid Order Summary
