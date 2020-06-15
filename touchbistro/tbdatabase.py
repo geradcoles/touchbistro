@@ -23,6 +23,10 @@ class TouchBistroDBQueryResult():
     #: it here.
     __db_handle = None
 
+    #: Set this to False if you really want to open the database in write mode
+    #: (must be set as a class variable)
+    _DB_READ_ONLY = True
+
     def __init__(self, db_location, **kwargs):
         self.log = logging.getLogger("{}.{}".format(
             self.__class__.__module__, self.__class__.__name__
@@ -33,6 +37,14 @@ class TouchBistroDBQueryResult():
         self.kwargs = kwargs
         self._bindings = None
         self.__cursor = None
+
+    @property
+    def db_uri(self):
+        """Returns the URI used to connect to the database"""
+        uri = f'file:{self._db_location}'
+        if TouchBistroDBQueryResult._DB_READ_ONLY:
+            uri += '?mode=ro'
+        return uri
 
     @property
     def db_results(self):
@@ -54,8 +66,10 @@ class TouchBistroDBQueryResult():
     def db_handle(self):
         "Returns an sqlite3 database handle"
         if TouchBistroDBQueryResult.__db_handle is None:
-            self.log.debug('getting an sqlite3 database handle')
-            handle = sqlite3.connect(self._db_location)
+            self.log.debug(
+                'getting an sqlite3 database handle at %s',
+                self.db_uri)
+            handle = sqlite3.connect(self.db_uri, uri=True)
             handle.row_factory = sqlite3.Row
             handle.cursor().execute(
                 f"PRAGMA cache_size = -{SQLITE3_CACHE_SIZE:d}")
