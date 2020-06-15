@@ -53,18 +53,23 @@ def write_orders(args, order_list, output):
     else:
         for order in order_list:
             for split in order:
-                if args.get('--json'):
-                    if output == sys.stdout:
-                        print(
-                            json.dumps(
-                                split.summary(), indent=4, sort_keys=True,
-                                default=str))
+                try:
+                    if args.get('--json'):
+                        if output == sys.stdout:
+                            print(
+                                json.dumps(
+                                    split.summary(), indent=4, sort_keys=True,
+                                    default=str))
+                        else:
+                            json.dump(
+                                split.summary(), output, sort_keys=True,
+                                default=str)
                     else:
-                        json.dump(
-                            split.summary(), output, sort_keys=True,
-                            default=str)
-                else:
-                    output.writelines(split.receipt_form())
+                        output.writelines(split.receipt_form())
+                except Exception as err:
+                    raise RuntimeError((
+                        "fatal exception while handling order "
+                        f"{split.order_number}: {err}"))
 
 
 if __name__ == '__main__':

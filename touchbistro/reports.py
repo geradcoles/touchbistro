@@ -232,9 +232,14 @@ def write_order_list_to_csv(handle, orders):
     writer.writeheader()
     for order in orders:
         for split in order:
-            for lineitem in explode_order(split):
-                order_item = format_datetime(lineitem)
-                writer.writerow(order_item)
+            try:
+                for lineitem in explode_order(split):
+                    order_item = format_datetime(lineitem)
+                    writer.writerow(order_item)
+            except Exception as err:
+                raise RuntimeError((
+                    "fatal exception while handling order "
+                    f"{split.order_number}: {err}"))
 
 
 def write_loyalty_to_csv(
