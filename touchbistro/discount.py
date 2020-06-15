@@ -103,10 +103,6 @@ class ItemDiscount(TouchBistroDBObject):
     @property
     def amount(self):
         "Returns the amount discounted for the OrderItem"
-        if self.is_void():
-            # void "amount" fields are the total for the voided line item,
-            # including quantity multiplier
-            return self.db_results['ZI_AMOUNT']
         return self.parent.quantity * self.db_results['ZI_AMOUNT']
 
     @property
