@@ -225,15 +225,16 @@ def format_datetime(order_item):
     return order_item
 
 
-def write_orders_to_csv(handle, orders):
+def write_order_list_to_csv(handle, orders):
     "Output the orders as CSV data"
     writer = csv.DictWriter(
         handle, dialect='excel', fieldnames=explode_order_fields())
     writer.writeheader()
     for order in orders:
-        for lineitem in explode_order(order):
-            order_item = format_datetime(lineitem)
-            writer.writerow(order_item)
+        for split in order:
+            for lineitem in explode_order(split):
+                order_item = format_datetime(lineitem)
+                writer.writerow(order_item)
 
 
 def write_loyalty_to_csv(
@@ -253,6 +254,7 @@ def write_order_to_csv(handle, order):
     writer = csv.DictWriter(
         handle, dialect='excel', fieldnames=explode_order_fields())
     writer.writeheader()
-    for lineitem in explode_order(order):
-        order_item = format_datetime(lineitem)
-        writer.writerow(order_item)
+    for split in order:
+        for lineitem in explode_order(split):
+            order_item = format_datetime(lineitem)
+            writer.writerow(order_item)

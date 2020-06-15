@@ -28,38 +28,43 @@ import json
 from docopt import docopt
 from touchbistro.order import Order, get_orders_for_date_range
 from touchbistro.reports import (
-    loyalty_report, write_orders_to_csv, write_order_to_csv,
+    loyalty_report, write_order_list_to_csv, write_order_to_csv,
 )
 
 
-def write_order(args, order_list, output):
+def write_order(args, order, output):
     "Dump an order in the specified output format"
-    for order in order_list:
-        if args.get('--csv'):
-            write_order_to_csv(output, order)
-        elif args.get('--json'):
-            json.dump(
-                order.summary(), output, indent=4,
-                sort_keys=True, default=str)
-        else:
-            output.writelines(order.receipt_form())
+    if args.get('--csv'):
+        write_order_to_csv(output, order)
+    else:
+        for split in order:
+            if args.get('--json'):
+                json.dump(
+                    split.summary(), output, indent=4,
+                    sort_keys=True, default=str)
+            else:
+                output.writelines(split.receipt_form())
 
 
 def write_orders(args, order_list, output):
     "Dump orders in the specified output format"
-    for orders in order_list:
-        if args.get('--csv'):
-            write_orders_to_csv(output, orders)
-        elif args.get('--json'):
-            for item in orders:
-                if output == sys.stdout:
-                    print(json.dumps(
-                        item, indent=4, sort_keys=True, default=str))
+    if args.get('--csv'):
+        write_order_list_to_csv(output, order_list)
+    else:
+        for order in order_list:
+            for split in order:
+                if args.get('--json'):
+                    if output == sys.stdout:
+                        print(
+                            json.dumps(
+                                split.summary(), indent=4, sort_keys=True,
+                                default=str))
+                    else:
+                        json.dump(
+                            split.summary(), output, sort_keys=True,
+                            default=str)
                 else:
-                    json.dump(item, output, sort_keys=True, default=str)
-        else:
-            for order in orders:
-                output.writelines(order.receipt_form())
+                    output.writelines(split.receipt_form())
 
 
 if __name__ == '__main__':
@@ -92,6 +97,7 @@ if __name__ == '__main__':
             latest_date=ARGS.get('<latest_date>', ARGS.get('<earliest_date>')),
             day_boundary=ARGS.get('--day-boundary')
         )
+        logging.getLogger().debug("Orders object: %s", ORDERS)
         if ARGS.get('--file'):
             with open(
                     os.path.expanduser(ARGS.get('--file')), 'w',

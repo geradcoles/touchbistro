@@ -117,13 +117,14 @@ class Order(TouchBistroObjectList):
 
     @property
     def order_number(self):
-        """Returns the order number corresponding to this object"""
+        "Returns the order number corresponding to this object, if supplied"
         return self.kwargs.get('order_number')
 
     def _vivify_db_row(self, row):
         return PaidOrderSplit(
             self._db_location,
             paid_order_id=row['ZPAIDORDER'],
+            order_number=row['ZORDERNUMBER'],
             split_id=row['ZI_INDEX'],
             split_by=row['ZI_SPLITBY'],  # unnecessary but here for debugging
             parent=self)
@@ -146,12 +147,19 @@ class OrderFromId(Order):
 
     QUERY_BINDING_ATTRIBUTES = ['order_id']
 
+    @property
+    def order_number(self):
+        "Raise an exception because this is not guaranteed to be here"
+        raise NotImplementedError(
+            "Don't try to get order_number from an OrderFromId object")
+
 
 class PaidOrderSplit(TouchBistroDBObject):
     """This class represents a paid touchbistro order, which can be a single
-    split on a larger order/bill. Pass in the following kwargs:
+    split on a larger order/bill. Pass in the following required kwargs:
 
     - paid_order_id: the id number corresponding to Z_PK in ZPAIDORDER
+    - order_number: the public facing number for the order (from Order)
     - split_id
     """
     #: Query to get as much information about an order as possible, including
@@ -180,6 +188,9 @@ class PaidOrderSplit(TouchBistroDBObject):
 
     def __init__(self, db_location, **kwargs):
         super(PaidOrderSplit, self).__init__(db_location, **kwargs)
+        self._paid_order_id = kwargs.get('paid_order_id')
+        self._order_number = kwargs.get('order_number')
+        self._split_id = kwargs.get('split_id')
         self._order_items = None
         self._payments = None
         self._taxes = None
@@ -187,7 +198,7 @@ class PaidOrderSplit(TouchBistroDBObject):
     @property
     def order_number(self):
         """Returns the order number from the parent Order object"""
-        return self.parent.order_number
+        return self._order_number
 
     @property
     def order_id(self):
@@ -234,7 +245,7 @@ class PaidOrderSplit(TouchBistroDBObject):
     @property
     def split_number(self):
         """Returns the split id passed into this object + 1"""
-        return self.kwargs.get('split_id') + 1
+        return self._split_id + 1
 
     @property
     def datetime(self):
@@ -464,8 +475,7 @@ class PaidOrderSplit(TouchBistroDBObject):
             datetime = self.datetime.strftime('%Y-%m-%d %I:%M:%S %p')
         except AttributeError:
             datetime = "None"
-        order_number = self.parent.order_number
-        header = f"DETAILS FOR ORDER #{order_number}"
+        header = f"DETAILS FOR ORDER #{self._order_number}"
         if self.split_by > 1:
             header += f" SPLIT {self.split_number} of {self.split_by}"
         output = (
