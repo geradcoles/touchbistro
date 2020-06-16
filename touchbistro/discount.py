@@ -103,6 +103,14 @@ class ItemDiscount(TouchBistroDBObject):
     @property
     def amount(self):
         "Returns the amount discounted for the OrderItem"
+        if self.is_void() and self.returns_inventory:
+            # it seems that some built-in TB voids "return inventory" and
+            # behave differently in terms of the way amounts are stored in the
+            # db. For these items, the ZI_AMOUNT field is the total value of
+            # the discount after quantity adjustments for line items, and for
+            # voids that do not return inventory, ZI_AMOUNT needs to be
+            # adjusted for the order line item quantity.
+            return self.db_results['ZI_AMOUNT']
         return self.parent.quantity * self.db_results['ZI_AMOUNT']
 
     @property
