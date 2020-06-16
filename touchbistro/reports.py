@@ -263,3 +263,8 @@ def write_order_to_csv(handle, order):
         for lineitem in explode_order(split):
             order_item = format_datetime(lineitem)
             writer.writerow(order_item)
+
+
+def write_utf8_bom(output):
+    """Writes the UTF-8 BOM to the output file handle"""
+    output.write('\ufeff')

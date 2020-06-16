@@ -28,7 +28,7 @@ import json
 from docopt import docopt
 from touchbistro.order import Order, get_orders_for_date_range
 from touchbistro.reports import (
-    loyalty_report, write_order_list_to_csv, write_order_to_csv,
+    loyalty_report, write_order_list_to_csv, write_order_to_csv, write_utf8_bom
 )
 
 
@@ -90,6 +90,7 @@ if __name__ == '__main__':
             with open(
                     os.path.expanduser(ARGS.get('--file')), 'w',
                     encoding='utf-8') as outfile:
+                write_utf8_bom(outfile)
                 write_order(ARGS, ORDER, outfile)
         else:
             write_order(ARGS, ORDER, sys.stdout)
@@ -107,6 +108,7 @@ if __name__ == '__main__':
             with open(
                     os.path.expanduser(ARGS.get('--file')), 'w',
                     encoding='utf-8') as outfile:
+                write_utf8_bom(outfile)
                 write_orders(ARGS, ORDERS, outfile)
                 if ARGS.get('--with-loyalty'):
                     loyalty_report(
