@@ -425,7 +425,8 @@ class PaidOrderSplit(TouchBistroDBObject):
                 ctx.rounding = decimal.ROUND_HALF_UP
                 taxes = decimal.Decimal(0.0)
                 for order in self.order_items:
-                    taxes += self._calc_tax_on_order_item(order) * 100
+                    taxes += decimal.Decimal(
+                        self._calc_tax_on_order_item(order))
                 total = float(taxes.to_integral_value()) / 100
                 self.log.debug("total tax on order: %3.2f", total)
                 self._taxes = total
@@ -481,25 +482,25 @@ class PaidOrderSplit(TouchBistroDBObject):
 
     def _calc_tax_on_order_item(self, order_item):
         """Given an OrderItem, calculate the tax on the item, in CENTS"""
-        return (
+        return (1 - order_item.discount_rate()) * (
             self._order_item_tax_1(order_item) +
             self._order_item_tax_2(order_item) +
-            self._order_item_tax_3(order_item))
+            self._order_item_tax_3(order_item)) * 100
 
     def _order_item_tax_1(self, order_item):
         """Return the tax1 amount for a given order item"""
-        return decimal.Decimal(order_item.tax1_subtotal() * self.tax_rate_1)
+        return order_item.tax1_subtotal() * self.tax_rate_1
 
     def _order_item_tax_2(self, order_item):
         """Return the tax2 amount for a given order item"""
         taxable = order_item.tax2_subtotal()
         if self.stack_tax_2_on_tax_1:
             taxable += self._order_item_tax_1(order_item)
-        return decimal.Decimal(taxable * self.tax_rate_2)
+        return taxable * self.tax_rate_2
 
     def _order_item_tax_3(self, order_item):
         """Return the tax3 amount for a given order item"""
-        return decimal.Decimal(order_item.tax3_subtotal() * self.tax_rate_3)
+        return order_item.tax3_subtotal() * self.tax_rate_3
 
     def receipt_form(self):
         """Prints the order in a receipt-like format"""
@@ -836,9 +837,9 @@ class OrderItem(TouchBistroDBObject):
     def tax_summary(self):
         """Returns a dictionary summary of taxes for this OrderItem"""
         return {
-            'tax1': self.tax1_subtotal(),
-            'tax2': self.tax2_subtotal(),
-            'tax3': self.tax3_subtotal()
+            'tax1_subtotal': self.tax1_subtotal(),
+            'tax2_subtotal': self.tax2_subtotal(),
+            'tax3_subtotal': self.tax3_subtotal()
         }
 
     def tax1_subtotal(self):
@@ -886,6 +887,15 @@ class OrderItem(TouchBistroDBObject):
 
         Tax is not included by default"""
         return self.gross + self.discounts.total()
+
+    def discount_rate(self):
+        """Returns a pro-rata discount rate based on the total value of all
+        discounts divided by the total pre-tax value of the line item and
+        its modifiers. This is used to calculate the effective tax on the line
+        item after discounts. A floating point value between 0 and 1."""
+        if self.discounts:
+            return - self.discounts.total() / self.gross
+        return 0.0
 
     @property
     def discounts(self):
