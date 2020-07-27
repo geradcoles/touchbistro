@@ -425,7 +425,7 @@ class PaidOrderSplit(TouchBistroDBObject):
                 ctx.rounding = decimal.ROUND_HALF_UP
                 taxes = decimal.Decimal(0.0)
                 for order in self.order_items:
-                    taxes += self._calc_tax_on_order_item(order)
+                    taxes += self._calc_tax_on_order_item(order) * 100
                 total = float(taxes.to_integral_value()) / 100
                 self.log.debug("total tax on order: %3.2f", total)
                 self._taxes = total
@@ -481,21 +481,25 @@ class PaidOrderSplit(TouchBistroDBObject):
 
     def _calc_tax_on_order_item(self, order_item):
         """Given an OrderItem, calculate the tax on the item, in CENTS"""
-        tax1 = decimal.Decimal(0.0)
-        tax2 = decimal.Decimal(0.0)
-        tax3 = decimal.Decimal(0.0)
-        # work in cents to avoid penny rounding problems.
-        order_subtotal = decimal.Decimal(order_item.subtotal() * 100)
-        if not order_item.menu_item.exclude_tax1:
-            tax1 += order_subtotal * decimal.Decimal(self.tax_rate_1)
-        if not order_item.menu_item.exclude_tax2:
-            taxable = order_subtotal
-            if self.stack_tax_2_on_tax_1:
-                taxable += tax1
-            tax2 += taxable * decimal.Decimal(self.tax_rate_2)
-        if not order_item.menu_item.exclude_tax3:
-            tax3 += order_subtotal * decimal.Decimal(self.tax_rate_3)
-        return tax1 + tax2 + tax3
+        return (
+            self._order_item_tax_1(order_item) +
+            self._order_item_tax_2(order_item) +
+            self._order_item_tax_3(order_item))
+
+    def _order_item_tax_1(self, order_item):
+        """Return the tax1 amount for a given order item"""
+        return decimal.Decimal(order_item.tax1_subtotal() * self.tax_rate_1)
+
+    def _order_item_tax_2(self, order_item):
+        """Return the tax2 amount for a given order item"""
+        taxable = order_item.tax2_subtotal()
+        if self.stack_tax_2_on_tax_1:
+            taxable += self._order_item_tax_1(order_item)
+        return decimal.Decimal(taxable * self.tax_rate_2)
+
+    def _order_item_tax_3(self, order_item):
+        """Return the tax3 amount for a given order item"""
+        return decimal.Decimal(order_item.tax3_subtotal() * self.tax_rate_3)
 
     def receipt_form(self):
         """Prints the order in a receipt-like format"""
@@ -773,6 +777,7 @@ class OrderItem(TouchBistroDBObject):
         summary['menu_item'] = self.menu_item.summary()
         summary['modifiers'] = self.modifiers.summary()
         summary['discounts'] = self.discounts.summary()
+        summary['taxes'] = self.tax_summary()
         return summary
 
     def receipt_form(self):
@@ -827,6 +832,41 @@ class OrderItem(TouchBistroDBObject):
         """Return the total value of this line item including modifiers, but
         no discounts"""
         return self.price + self.modifiers.total()
+
+    def tax_summary(self):
+        """Returns a dictionary summary of taxes for this OrderItem"""
+        return {
+            'tax1': self.tax1_subtotal(),
+            'tax2': self.tax2_subtotal(),
+            'tax3': self.tax3_subtotal()
+        }
+
+    def tax1_subtotal(self):
+        """Returns the amount eligible for tax1 for this order item (including
+        its modifiers)."""
+        taxable = 0.0
+        if not self.menu_item.exclude_tax1:
+            taxable += self.price
+        taxable += self.modifiers.tax1_taxable_subtotal
+        return taxable
+
+    def tax2_subtotal(self):
+        """Returns the amount eligible for tax2 for this order item (including
+        its modifiers)."""
+        taxable = 0.0
+        if not self.menu_item.exclude_tax2:
+            taxable += self.price
+        taxable += self.modifiers.tax2_taxable_subtotal
+        return taxable
+
+    def tax3_subtotal(self):
+        """Returns the amount eligible for tax3 for this order item (including
+        its modifiers)."""
+        taxable = 0.0
+        if not self.menu_item.exclude_tax3:
+            taxable += self.price
+        taxable += self.modifiers.tax3_taxable_subtotal
+        return taxable
 
     def was_voided(self):
         """Inspect discounts for this line item to see if it has a void. Voided

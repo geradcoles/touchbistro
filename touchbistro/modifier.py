@@ -55,6 +55,30 @@ class ItemModifierList(TouchBistroObjectList):
             self._db_location, modifier_uuid=row['ZUUID'],
             parent=self.parent)
 
+    @property
+    def tax1_taxable_subtotal(self):
+        "Returns the tax 1 taxable subtotal for all items (incl. nested)"
+        subtotal = 0.0
+        for item in self.items:
+            subtotal += item.tax1_taxable_subtotal
+        return subtotal
+
+    @property
+    def tax2_taxable_subtotal(self):
+        "Returns the tax 2 taxable subtotal for all items (incl. nested)"
+        subtotal = 0.0
+        for item in self.items:
+            subtotal += item.tax2_taxable_subtotal
+        return subtotal
+
+    @property
+    def tax3_taxable_subtotal(self):
+        "Returns the tax 3 taxable subtotal for all items (incl. nested)"
+        subtotal = 0.0
+        for item in self.items:
+            subtotal += item.tax3_taxable_subtotal
+        return subtotal
+
 
 class ItemModifier(TouchBistroDBObject):
     """Class to represent an order item Modifier in TouchBistro. Corresponds
@@ -209,11 +233,62 @@ class ItemModifier(TouchBistroDBObject):
         return self.parent.quantity * self.db_results['ZI_PRICE']
 
     @property
+    def tax1_taxable_subtotal(self):
+        """Crawl through modifier and nested sub-entities and return a the
+        tax1 subtotal for all menu-based entities that have tax settings.
+        For non-menu-based modifiers, always returns the full price of the
+        modifier, including any nested entities."""
+        subtotal = 0.0
+        if self.is_menu_based() and self.menu_item.exclude_tax1:
+            pass
+        else:
+            subtotal += self.price
+        for modifier in self.nested_modifiers:
+            subtotal += modifier.tax1_taxable_subtotal
+        return subtotal
+
+    @property
+    def tax2_taxable_subtotal(self):
+        """Crawl through modifier and nested sub-entities and return a the
+        tax2 subtotal for all menu-based entities that have tax settings.
+        For non-menu-based modifiers, always returns the full price of the
+        modifier, including any nested entities."""
+        subtotal = 0.0
+        if self.is_menu_based() and self.menu_item.exclude_tax2:
+            pass
+        else:
+            subtotal += self.price
+        for modifier in self.nested_modifiers:
+            subtotal += modifier.tax2_taxable_subtotal
+        return subtotal
+
+    @property
+    def tax3_taxable_subtotal(self):
+        """Crawl through modifier and nested sub-entities and return a the
+        tax3 subtotal for all menu-based entities that have tax settings.
+        For non-menu-based modifiers, always returns the full price of the
+        modifier, including any nested entities."""
+        subtotal = 0.0
+        if self.is_menu_based() and self.menu_item.exclude_tax3:
+            pass
+        else:
+            subtotal += self.price
+        for modifier in self.nested_modifiers:
+            subtotal += modifier.tax3_taxable_subtotal
+        return subtotal
+
+    @property
     def name(self):
         "Returns the name associated with the modifier (incl custom text)"
         if self.menu_item_id:
             return self.db_results['MENU_ITEM_NAME']
         return self.db_results['ZI_NAME']
+
+    def is_menu_based(self):
+        "Return True if this is a menu-based modifier"
+        if self.menu_item:
+            return True
+        return False
 
     def receipt_form(self, depth=1):
         """Output the modifier in a form suitable for receipts and chits"""
