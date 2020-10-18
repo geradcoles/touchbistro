@@ -894,7 +894,10 @@ class OrderItem(TouchBistroDBObject):
         its modifiers. This is used to calculate the effective tax on the line
         item after discounts. A floating point value between 0 and 1."""
         if self.discounts:
-            return - self.discounts.total() / self.gross
+            try:
+                return - self.discounts.total() / self.gross
+            except ZeroDivisionError:
+                return 0.0
         return 0.0
 
     @property
