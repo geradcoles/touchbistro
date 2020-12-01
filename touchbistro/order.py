@@ -824,7 +824,7 @@ class OrderItem(TouchBistroDBObject):
         """Return the price of this line item before applying discounts and
         modifiers, taking into account quantity"""
         price = self.menu_item.price
-        if self.open_price:
+        if self.open_price or self.menu_item.price is None:
             price = self.open_price
         return self.quantity * price
 
