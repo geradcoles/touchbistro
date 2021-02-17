@@ -356,7 +356,7 @@ class PaidOrderSplit(TouchBistroDBObject):
         "Returns the display name of the waiter that closed the bill"
         try:
             return self.waiter.display_name
-        except KeyError:
+        except (KeyError, TypeError):
             return None
 
     @property
