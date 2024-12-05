@@ -1,4 +1,5 @@
 """Contain classes and functions for working with order item modifiers"""
+
 from .base import TouchBistroDBObject, TouchBistroObjectList
 from .menu import MenuItem
 
@@ -39,7 +40,7 @@ class ItemModifierList(TouchBistroObjectList):
         ORDER BY ZI_INDEX ASC
         """
 
-    QUERY_BINDING_ATTRIBUTES = ['order_item_id']
+    QUERY_BINDING_ATTRIBUTES = ["order_item_id"]
 
     def total(self):
         "Returns the total value of modifiers in the list"
@@ -52,8 +53,8 @@ class ItemModifierList(TouchBistroObjectList):
     def _vivify_db_row(self, row):
         "Convert a db row to an ItemModifier"
         return ItemModifier(
-            self._db_location, modifier_uuid=row['ZUUID'],
-            parent=self.parent)
+            self._db_location, modifier_uuid=row["ZUUID"], parent=self.parent
+        )
 
     @property
     def tax1_taxable_subtotal(self):
@@ -110,11 +111,19 @@ class ItemModifier(TouchBistroDBObject):
 
     """
 
-    META_ATTRIBUTES = ['name', 'price',
-                       'is_required', 'container_order_item_id',
-                       'menu_item_id', 'sales_category',
-                       'modifier_group_id', 'modifier_group_for_menu_item',
-                       'order_item', 'datetime', 'waiter_name']
+    META_ATTRIBUTES = [
+        "name",
+        "price",
+        "is_required",
+        "container_order_item_id",
+        "menu_item_id",
+        "sales_category",
+        "modifier_group_id",
+        "modifier_group_for_menu_item",
+        "order_item",
+        "datetime",
+        "waiter_name",
+    ]
 
     #: Query to get details about this modifier
     QUERY = """SELECT
@@ -127,36 +136,36 @@ class ItemModifier(TouchBistroDBObject):
         WHERE ZMODIFIER.ZUUID = :modifier_uuid
         """
 
-    QUERY_BINDING_ATTRIBUTES = ['modifier_uuid']
+    QUERY_BINDING_ATTRIBUTES = ["modifier_uuid"]
 
     @property
     def object_type(self):
         "Returns the name of this object's class"
-        if self.kwargs.get('is_nested', None):
-            return 'Nested' + self.__class__.__name__
+        if self.kwargs.get("is_nested", None):
+            return "Nested" + self.__class__.__name__
         return self.__class__.__name__
 
     @property
     def is_required(self):
         "Returns True if this was a required modifier"
-        if self.db_results['ZREQUIREDMODIFIER']:
+        if self.db_results["ZREQUIREDMODIFIER"]:
             return True
         return False
 
     @property
     def container_order_item_id(self):
         "Returns the ID of the OrderItem that this modifier is associated with"
-        return self.db_results['ZCONTAINERORDERITEM']
+        return self.db_results["ZCONTAINERORDERITEM"]
 
     @property
     def menu_item_id(self):
         "Returns the simple Z_PK version of the menu item ID for this modifier"
-        return self.db_results['ZMENUITEM']
+        return self.db_results["ZMENUITEM"]
 
     @property
     def menu_item_uuid(self):
         "Returns the UUID of an associate menu item, if applicable"
-        return self.db_results['MENU_ITEM_UUID']
+        return self.db_results["MENU_ITEM_UUID"]
 
     @property
     def waiter_name(self):
@@ -172,7 +181,8 @@ class ItemModifier(TouchBistroDBObject):
             return MenuItem(
                 db_location=self._db_location,
                 menuitem_uuid=self.menu_item_uuid,
-                parent=self)
+                parent=self,
+            )
         return None
 
     @property
@@ -191,7 +201,7 @@ class ItemModifier(TouchBistroDBObject):
     @property
     def modifier_group_id(self):
         "Returns the ID of the modifier group this modifier was a part of"
-        return self.db_results['ZMODIFIERGROUP']
+        return self.db_results["ZMODIFIERGROUP"]
 
     @property
     def modifier_group_for_menu_item(self):
@@ -199,13 +209,13 @@ class ItemModifier(TouchBistroDBObject):
         from :attr:`menu_item_id` above, in situations where the modifier came
         about as a result of a nested choice of a menu item with its own
         modifiers"""
-        return self.db_results['ZMODIFIERGROUPFORMENUITEM']
+        return self.db_results["ZMODIFIERGROUPFORMENUITEM"]
 
     @property
     def order_item(self):
         """For nested modifers, return the corresponding order item ID that
         may/should have further modifiers associated with it."""
-        return self.db_results['ZORDERITEM']
+        return self.db_results["ZORDERITEM"]
 
     @property
     def nested_modifiers(self):
@@ -214,14 +224,15 @@ class ItemModifier(TouchBistroDBObject):
             self._db_location,
             order_item_id=self.order_item,
             parent=self.parent,
-            is_nested=True)
+            is_nested=True,
+        )
 
     @property
     def datetime(self):
         """Returns a datetime object (in local timezone) corresponding to the
         time that the modifier was created. Does not appear to be used."""
-        if self.db_results['ZCREATEDATE']:
-            return self.db_results['ZCREATEDATE']
+        if self.db_results["ZCREATEDATE"]:
+            return self.db_results["ZCREATEDATE"]
         try:
             return self.parent.datetime
         except AttributeError:
@@ -230,7 +241,7 @@ class ItemModifier(TouchBistroDBObject):
     @property
     def price(self):
         "Return the price associated with the modifier, adjusted for quantity"
-        return self.parent.quantity * self.db_results['ZI_PRICE']
+        return self.parent.quantity * self.db_results["ZI_PRICE"]
 
     @property
     def tax1_taxable_subtotal(self):
@@ -241,7 +252,8 @@ class ItemModifier(TouchBistroDBObject):
         subtotal = 0.0
         if self.is_menu_based() and self.menu_item.exclude_tax1:
             pass
-        else:
+        elif not self.parent.menu_item.exclude_tax1:
+            # tax follows the parent OrderItem
             subtotal += self.price
         for modifier in self.nested_modifiers:
             subtotal += modifier.tax1_taxable_subtotal
@@ -256,7 +268,8 @@ class ItemModifier(TouchBistroDBObject):
         subtotal = 0.0
         if self.is_menu_based() and self.menu_item.exclude_tax2:
             pass
-        else:
+        elif not self.parent.menu_item.exclude_tax2:
+            # tax follows the parent OrderItem
             subtotal += self.price
         for modifier in self.nested_modifiers:
             subtotal += modifier.tax2_taxable_subtotal
@@ -271,7 +284,8 @@ class ItemModifier(TouchBistroDBObject):
         subtotal = 0.0
         if self.is_menu_based() and self.menu_item.exclude_tax3:
             pass
-        else:
+        elif not self.parent.menu_item.exclude_tax3:
+            # tax follows the parent OrderItem
             subtotal += self.price
         for modifier in self.nested_modifiers:
             subtotal += modifier.tax3_taxable_subtotal
@@ -281,8 +295,8 @@ class ItemModifier(TouchBistroDBObject):
     def name(self):
         "Returns the name associated with the modifier (incl custom text)"
         if self.menu_item_id:
-            return self.db_results['MENU_ITEM_NAME']
-        return self.db_results['ZI_NAME']
+            return self.db_results["MENU_ITEM_NAME"]
+        return self.db_results["ZI_NAME"]
 
     def is_menu_based(self):
         "Return True if this is a menu-based modifier"
@@ -299,12 +313,11 @@ class ItemModifier(TouchBistroDBObject):
                 output += f"${self.price:3.2f}: "
             output += f"{self.name}\n"
             for modifier in self.nested_modifiers:
-                output += modifier.receipt_form(depth=(depth+1))
+                output += modifier.receipt_form(depth=(depth + 1))
             return output
         except Exception as err:
             raise RuntimeError(
                 "Caught exception while processing modifier {}:\n{}".format(
-                    self.uuid,
-                    err
+                    self.uuid, err
                 )
             )
