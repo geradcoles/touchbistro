@@ -1,6 +1,7 @@
 """This module contains classes and functions to work with TouchBistro
 payments.
 """
+
 from .base import TouchBistroDBObject, TouchBistroObjectList
 from .loyalty import LoyaltyActivity
 from .customer_account import CustomerAccount
@@ -9,8 +10,7 @@ from .dates import cocoa_2_datetime
 
 #: This map is used to generate a human-readable name for ZI_TYPE in the
 #: ZPAYMENT table.
-PAYMENT_TYPES = ("Cash", "Electronic", "Unknown", "Unknown",
-                 "Customer Account")
+PAYMENT_TYPES = ("Cash", "Electronic", "Unknown", "Unknown", "Customer Account")
 
 
 def payment_type_name(type_id):
@@ -35,7 +35,7 @@ class PaymentGroup(TouchBistroObjectList):
         ORDER BY ZI_INDEX ASC
         """
 
-    QUERY_BINDING_ATTRIBUTES = ['payment_group_id']
+    QUERY_BINDING_ATTRIBUTES = ["payment_group_id"]
 
     def total_amount(self):
         "Returns the total value of payments in the list"
@@ -44,11 +44,15 @@ class PaymentGroup(TouchBistroObjectList):
             amount += payment.amount
         return amount
 
+    def total_tips(self):
+        """Sums up the tips across all payments, return as a float"""
+        total = 0.0
+        for payment in self.items:
+            total += payment.tip
+        return total
+
     def _vivify_db_row(self, row):
-        return Payment(
-            self._db_location,
-            payment_uuid=row['ZUUID'],
-            parent=self.parent)
+        return Payment(self._db_location, payment_uuid=row["ZUUID"], parent=self.parent)
 
 
 class Payment(TouchBistroDBObject):
@@ -60,14 +64,23 @@ class Payment(TouchBistroDBObject):
         - payment_uuid: the UUID for this payment
     """
 
-    META_ATTRIBUTES = ['payment_number', 'payment_type',
-                       'payment_type_id',
-                       'amount', 'tip', 'change', 'balance',
-                       'refundable_amount', 'original_payment_uuid',
-                       'customer_account_id', 'customer_id',
-                       'customer_account_name',
-                       'card_type', 'auth_number', 'datetime',
-                       ]
+    META_ATTRIBUTES = [
+        "payment_number",
+        "payment_type",
+        "payment_type_id",
+        "amount",
+        "tip",
+        "change",
+        "balance",
+        "refundable_amount",
+        "original_payment_uuid",
+        "customer_account_id",
+        "customer_id",
+        "customer_account_name",
+        "card_type",
+        "auth_number",
+        "datetime",
+    ]
 
     #: Query to get details about this discount
     QUERY = """SELECT
@@ -76,19 +89,19 @@ class Payment(TouchBistroDBObject):
         WHERE ZUUID = :payment_uuid
         """
 
-    QUERY_BINDING_ATTRIBUTES = ['payment_uuid']
+    QUERY_BINDING_ATTRIBUTES = ["payment_uuid"]
 
     @property
     def payment_number(self):
         """Returns the payment number associated with this payment, by adding
         1 to ZI_INDEX to make it human readable"""
-        return self.db_results['ZI_INDEX'] + 1
+        return self.db_results["ZI_INDEX"] + 1
 
     @property
     def amount(self):
         """Returns the payment amount for paid orders"""
         try:
-            return round(self.db_results['ZI_AMOUNT'], 2)
+            return round(self.db_results["ZI_AMOUNT"], 2)
         except TypeError:
             return 0.0
 
@@ -96,7 +109,7 @@ class Payment(TouchBistroDBObject):
     def tip(self):
         """Returns the tip amount for paid orders"""
         try:
-            return round(self.db_results['ZTIP'], 2)
+            return round(self.db_results["ZTIP"], 2)
         except TypeError:
             return 0.0
 
@@ -104,7 +117,7 @@ class Payment(TouchBistroDBObject):
     def change(self):
         """Returns the amount of change provided"""
         try:
-            return round(self.db_results['ZI_CHANGE'], 2)
+            return round(self.db_results["ZI_CHANGE"], 2)
         except TypeError:
             return 0.0
 
@@ -112,7 +125,7 @@ class Payment(TouchBistroDBObject):
     def refundable_amount(self):
         """Returns the refundable amount of the order"""
         try:
-            return round(self.db_results['ZI_REFUNDABLEAMOUNT'], 2)
+            return round(self.db_results["ZI_REFUNDABLEAMOUNT"], 2)
         except TypeError:
             return 0.0
 
@@ -120,7 +133,7 @@ class Payment(TouchBistroDBObject):
     def original_payment_uuid(self):
         """If this was a refund payment, return the UUID of the original
         payment that was refunded (in a fully-integrated refund scenario)."""
-        return self.db_results['ZORIGINALPAYMENTUUID']
+        return self.db_results["ZORIGINALPAYMENTUUID"]
 
     def is_refund(self):
         "Return true if this is a refund payment"
@@ -130,14 +143,14 @@ class Payment(TouchBistroDBObject):
     def balance(self):
         """Returns the remaining balance after the payment was made"""
         try:
-            return round(self.db_results['ZBALANCE'], 2)
+            return round(self.db_results["ZBALANCE"], 2)
         except TypeError:
             return 0.0
 
     @property
     def payment_type_id(self):
         """Returns a payment type ID for the order (based on ZI_TYPE column)"""
-        return self.db_results['ZI_TYPE']
+        return self.db_results["ZI_TYPE"]
 
     @property
     def payment_type(self):
@@ -148,16 +161,14 @@ class Payment(TouchBistroDBObject):
     def customer_account_id(self):
         """Return an ID number for a customer account associated with the
         payment, if there was one (ZACCOUNT column)"""
-        return self.db_results['ZACCOUNT']
+        return self.db_results["ZACCOUNT"]
 
     @property
     def customer_account(self):
         """Returns a :class:`CustomerAccount` corresponding to the account id
         recorded for the payment"""
         return CustomerAccount(
-            self._db_location,
-            customer_account_id=self.customer_account_id,
-            parent=self
+            self._db_location, customer_account_id=self.customer_account_id, parent=self
         )
 
     @property
@@ -172,24 +183,24 @@ class Payment(TouchBistroDBObject):
     def customer_id(self):
         """Returns the ID of a Customer associated with the payment, if
         present (ZCUSTOMER column)"""
-        return self.db_results['ZCUSTOMER']
+        return self.db_results["ZCUSTOMER"]
 
     @property
     def card_type(self):
         """When payment cards are used, return the card type"""
-        return self.db_results['ZCARDTYPE']
+        return self.db_results["ZCARDTYPE"]
 
     @property
     def auth_number(self):
         """When payment cards are used, return the card authorization #"""
-        return self.db_results['ZAUTH']
+        return self.db_results["ZAUTH"]
 
     @property
     def datetime(self):
         """Returns a Python Datetime object with local timezone corresponding
         to the time that the payment occurred"""
         try:
-            return cocoa_2_datetime(self.db_results['ZCREATEDATE'])
+            return cocoa_2_datetime(self.db_results["ZCREATEDATE"])
         except TypeError:
             try:
                 return self.parent.datetime
@@ -199,7 +210,7 @@ class Payment(TouchBistroDBObject):
     @property
     def is_loyalty(self):
         """Returns true if this was a loyalty-type payment"""
-        if self.card_type == 'Loyalty':
+        if self.card_type == "Loyalty":
             return True
         return False
 
@@ -224,9 +235,7 @@ class Payment(TouchBistroDBObject):
         None otherwise"""
         if self.is_loyalty:
             return LoyaltyActivity(
-                self._db_location,
-                transaction_id=self.auth_number,
-                parent=self
+                self._db_location, transaction_id=self.auth_number, parent=self
             )
         return None
 
@@ -246,12 +255,12 @@ class Payment(TouchBistroDBObject):
             pay_type = f"CUSTOMER ACCT. [{self.customer_account_id}]"
         output = (
             f"Payment {self.payment_number:2d}: {pay_type:20s} "
-            '      ' + f"${self.amount:3.2f}\n"
+            "      " + f"${self.amount:3.2f}\n"
         )
-        output += ' ' * 33 + f"Tip:  ${self.tip:3.2f}\n"
+        output += " " * 33 + f"Tip:  ${self.tip:3.2f}\n"
         if self.change:
-            output += ' ' * 30 + f"Change:  ${self.change:3.2f}\n"
-        output += ' ' * 19 + f"Remaining Balance:  ${self.balance:3.2f}\n"
+            output += " " * 30 + f"Change:  ${self.change:3.2f}\n"
+        output += " " * 19 + f"Remaining Balance:  ${self.balance:3.2f}\n"
         if self.is_loyalty:
             output += f"          Account #: "
             output += f"{self.loyalty_activity.account_number}\n"
@@ -266,7 +275,7 @@ class Payment(TouchBistroDBObject):
         """Add loyalty information to default summary"""
         output = super(Payment, self).summary()
         try:
-            output['loyalty'] = self.loyalty_activity.summary()
+            output["loyalty"] = self.loyalty_activity.summary()
         except AttributeError:
             pass
         return output

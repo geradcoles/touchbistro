@@ -1,9 +1,12 @@
 """Module to get information about orders, such as order totals, menu items,
 etc.
 """
+
 import decimal
+import copy
 from datetime import timedelta
 import sqlite3
+import pandas as pd
 from .base import TouchBistroDBObject, TouchBistroObjectList
 from .dates import cocoa_2_datetime, datetime_2_cocoa, to_local_datetime
 from .discount import ItemDiscountList
@@ -13,10 +16,10 @@ from .menu import MenuItem
 from .waiter import Waiter
 
 
-def center(text, width, symbol=' '):
+def center(text, width, symbol=" "):
     """Center-pad a string within the given width using the given symbol"""
     pad = width - len(text)
-    lpad = round(pad/2)
+    lpad = round(pad / 2)
     rpad = pad - lpad
     return symbol * lpad + text + symbol * rpad
 
@@ -27,17 +30,28 @@ def takeout_type_pretty(value):
 
 
 ZI_TAKEOUTTYPE_MAP = {
-    None: 'dinein',
-    0: 'takeout',
-    1: 'delivery',
-    2: 'bartab',
-    3: 'unknown',
-    4: 'onlineorder'
+    None: "dinein",
+    0: "takeout",
+    1: "delivery",
+    2: "bartab",
+    3: "unknown",
+    4: "onlineorder",
+}
+
+#: Used to create empty dictionaries for waiter stats
+_WAITER_STATS_PROTOTYPE = {
+    "num_items": 0,
+    "gross": 0.0,
+    "net": 0.0,
+    "tips": 0.0,
+    "payments": 0,
+    "first_item_time": to_local_datetime("2100-01-01 00:00:00"),
 }
 
 
 def get_orders_for_date_range(
-        db_location, earliest_date, latest_date, day_boundary='02:00:00'):
+    db_location, earliest_date, latest_date, day_boundary="02:00:00"
+):
     """Given an earliest and a latest date, return an OrderTimeRange object
     containing all the orders for that date period. latest_date is inclusive,
     so if you specify 2020-05-31 as the latest_date, all orders from that day
@@ -50,9 +64,9 @@ def get_orders_for_date_range(
     """
     return OrderTimeRange(
         db_location,
-        earliest_time=to_local_datetime(earliest_date + ' ' + day_boundary),
-        cutoff_time=to_local_datetime(
-            latest_date + ' ' + day_boundary) + timedelta(days=1)
+        earliest_time=to_local_datetime(earliest_date + " " + day_boundary),
+        cutoff_time=to_local_datetime(latest_date + " " + day_boundary)
+        + timedelta(days=1),
     )
 
 
@@ -65,6 +79,28 @@ def scrub_zero_amounts(input_dict):
         if value != 0.0:
             output[key] = value
     return output
+
+
+def select_effective_waiter(waiter_stats):
+    """Used in `Order.waiter_statistics()` -
+    Given a set of dictionaries reflecting waiter statistics, which include the
+    first time a waiter added an item to a table
+    """
+    # extract the waiter name, gross sales and first item time, sort by
+    # gross sales, desc and first item time asc, and return the name of the
+    # first waiter
+    ws = copy.deepcopy(waiter_stats)
+    del ws["total"]
+    df = pd.DataFrame(
+        {
+            "waiter_name": ws.keys(),
+            "gross": [ws[waiter]["gross"] for waiter in ws.keys()],
+            "first_item_time": [ws[waiter]["first_item_time"] for waiter in ws.keys()],
+        }
+    )
+    return df.sort_values(
+        by=["gross", "first_item_time"], ascending=[False, True]
+    ).iloc[0]["waiter_name"]
 
 
 class OrderTimeRange(TouchBistroObjectList):
@@ -89,18 +125,14 @@ class OrderTimeRange(TouchBistroObjectList):
     def bindings(self):
         """Assemble query binding attributes by converting datetime to cocoa"""
         return {
-            'earliest_time': datetime_2_cocoa(
-                self.kwargs.get('earliest_time')),
-            'cutoff_time': datetime_2_cocoa(
-                self.kwargs.get('cutoff_time')
-            )
+            "earliest_time": datetime_2_cocoa(self.kwargs.get("earliest_time")),
+            "cutoff_time": datetime_2_cocoa(self.kwargs.get("cutoff_time")),
         }
 
     def _vivify_db_row(self, row):
         return OrderFromId(
-            self._db_location,
-            order_id=row['ZORDER'],
-            parent=self.parent)
+            self._db_location, order_id=row["ZORDER"], parent=self.parent
+        )
 
 
 class Order(TouchBistroObjectList):
@@ -111,49 +143,103 @@ class Order(TouchBistroObjectList):
 
     - order_number
     """
+
     QUERY = """SELECT * FROM ZORDER
         WHERE ZORDERNUMBER = :order_number
         AND ZPAIDORDER>0 /* not sure what to do with deleted/unpaid splits */
         ORDER BY ZI_INDEX ASC"""
-    QUERY_BINDING_ATTRIBUTES = ['order_number']
+    QUERY_BINDING_ATTRIBUTES = ["order_number"]
 
     @property
     def order_number(self):
         "Returns the order number corresponding to this object, if supplied"
-        return self.kwargs.get('order_number')
+        return self.kwargs.get("order_number")
 
     def _vivify_db_row(self, row):
         return PaidOrderSplit(
             self._db_location,
-            paid_order_id=row['ZPAIDORDER'],
-            order_number=row['ZORDERNUMBER'],
-            split_id=row['ZI_INDEX'],
-            table_split_by=row['ZI_SPLITBY'],
-            parent=self)
+            paid_order_id=row["ZPAIDORDER"],
+            order_number=row["ZORDERNUMBER"],
+            split_id=row["ZI_INDEX"],
+            table_split_by=row["ZI_SPLITBY"],
+            parent=self,
+        )
+
+    def waiter_statistics(self):
+        """Returns a dictionary representing waiter-related sales data for all
+        splits nested under this Order, as well as a set of totals for the
+        entire order under the 'total' key. The dictionary has a key for each
+        waiter's name involved in ordering items, along with a nested
+        dictionary with these statistics:
+
+        - num_items: Number of items rung in across all splits
+        - gross: Gross dollar value of all items including modifiers
+        - net: Net dollar value of all items after discounts
+        - tips: a pro-rata portion of tips attributed to the waiter
+        - payments: how many payments were taken by the waiter
+        - first_item_time: the date/time when the first item was rung in by each waiter, and overall (for the total key)
+        - guest_count: number of guests on Order (total key only)
+        - effective_waiter: who rang in the most $$ (total key only)
+
+        Tips are calculated by taking the gross amount of items rung in by
+        a waiter, and weighting the total tips collected on each split pro-rata
+        based on the portion of the sales rung in by each waiter.
+
+        The effective waiter is determined by gross dollar value rung in by
+        each waiter that was involved with the table (based on order items).
+        In the event of a tie, the first of the tied waiters to have rung in
+        an item wins.
+
+        """
+        waiter_stats = {"total": copy.deepcopy(_WAITER_STATS_PROTOTYPE)}
+        guest_count = 1
+        for order in self.items:
+            if order.party_size > guest_count:
+                guest_count = order.party_size
+            ts = order.waiter_statistics()
+            for waiter in ts.keys():
+                if waiter not in waiter_stats:
+                    waiter_stats[waiter] = copy.deepcopy(_WAITER_STATS_PROTOTYPE)
+                for stat in ts[waiter].keys():
+                    if stat == "first_item_time":
+                        if ts[waiter][stat] < waiter_stats[waiter]["first_item_time"]:
+                            waiter_stats[waiter]["first_item_time"] = ts[waiter][stat]
+                        if ts[waiter][stat] < waiter_stats["total"]["first_item_time"]:
+                            waiter_stats["total"]["first_item_time"] = ts[waiter][stat]
+                    else:
+                        waiter_stats[waiter][stat] += ts[waiter][stat]
+                        waiter_stats["total"][stat] += ts[waiter][stat]
+        waiter_stats["total"]["guest_count"] = guest_count
+        waiter_stats["total"]["effective_waiter"] = select_effective_waiter(
+            waiter_stats
+        )
+        return waiter_stats
 
 
 class OrderFromId(Order):
     """Get a list of splits for an order based on its ID number
-    (not the order number - be careful - this is the Z_PK column). Exaclty
+    (not the order number - be careful - this is the Z_PK column). Exactly
     the same as Order in terms of methods and attributes.
 
     kwargs:
 
     - order_id
     """
+
     QUERY = """SELECT * FROM ZORDER
         WHERE Z_PK = :order_id
         AND ZPAIDORDER>0 /* not sure what to do with deleted/unpaid splits */
         ORDER BY ZI_INDEX ASC
     """
 
-    QUERY_BINDING_ATTRIBUTES = ['order_id']
+    QUERY_BINDING_ATTRIBUTES = ["order_id"]
 
     @property
     def order_number(self):
         "Raise an exception because this is not guaranteed to be here"
         raise NotImplementedError(
-            "Don't try to get order_number from an OrderFromId object")
+            "Don't try to get order_number from an OrderFromId object"
+        )
 
 
 class PaidOrderSplit(TouchBistroDBObject):
@@ -165,6 +251,7 @@ class PaidOrderSplit(TouchBistroDBObject):
     - table_split_by: from the parent row in ZORDER (ZI_SPLITBY)
     - split_id
     """
+
     #: Query to get as much information about an order as possible, including
     #: joining across the ZCLOSEDTAKEOUT and ZCUSTOMTAKEOUTTYPE tables to
     #: enrich the results.
@@ -179,22 +266,33 @@ class PaidOrderSplit(TouchBistroDBObject):
         WHERE ZPAIDORDER.Z_PK = :paid_order_id
     """
 
-    QUERY_BINDING_ATTRIBUTES = ['paid_order_id']
+    QUERY_BINDING_ATTRIBUTES = ["paid_order_id"]
 
     META_ATTRIBUTES = [
-        'outstanding_balance', 'split_number',
-        'order_number', 'order_type', 'table_name',
-        'bill_number', 'party_name', 'split_by',
-        'custom_takeout_type', 'waiter_name', 'paid_datetime',
-        'subtotal', 'taxes', 'total', 'party_size', 'seated_datetime'
+        "outstanding_balance",
+        "split_number",
+        "order_number",
+        "order_type",
+        "table_name",
+        "bill_number",
+        "party_name",
+        "split_by",
+        "custom_takeout_type",
+        "waiter_name",
+        "paid_datetime",
+        "subtotal",
+        "taxes",
+        "total",
+        "party_size",
+        "seated_datetime",
     ]
 
     def __init__(self, db_location, **kwargs):
         super(PaidOrderSplit, self).__init__(db_location, **kwargs)
-        self._paid_order_id = kwargs.get('paid_order_id')
-        self._order_number = kwargs.get('order_number')
-        self._split_id = kwargs.get('split_id')
-        self._table_split_by = kwargs.get('table_split_by')
+        self._paid_order_id = kwargs.get("paid_order_id")
+        self._order_number = kwargs.get("order_number")
+        self._split_id = kwargs.get("split_id")
+        self._table_split_by = kwargs.get("table_split_by")
         self._order_items = None
         self._payments = None
         self._taxes = None
@@ -207,13 +305,13 @@ class PaidOrderSplit(TouchBistroDBObject):
     @property
     def order_id(self):
         """The Z_PK Order ID from the parent Order object"""
-        return self.db_results['ZORDER']
+        return self.db_results["ZORDER"]
 
     @property
     def bill_number(self):
         "Return the bill number for this paid order"
         try:
-            return self.db_results['ZI_BILLNUMBER']
+            return self.db_results["ZI_BILLNUMBER"]
         except KeyError:
             return None
 
@@ -221,20 +319,20 @@ class PaidOrderSplit(TouchBistroDBObject):
     def party_name(self):
         "Return the party name for this paid order"
         try:
-            return self.db_results['ZPARTYNAME']
+            return self.db_results["ZPARTYNAME"]
         except KeyError:
             return None
 
     @property
     def party_size(self):
         "Return the size of the party"
-        return self.db_results['ZI_PARTYSIZE']
+        return self.db_results["ZI_PARTYSIZE"]
 
     @property
     def table_name(self):
         "Returns the table name for the order"
         try:
-            return self.db_results['ZTABLENAME']
+            return self.db_results["ZTABLENAME"]
         except KeyError:
             return None
 
@@ -242,8 +340,8 @@ class PaidOrderSplit(TouchBistroDBObject):
     def split_by(self):
         """Returns the number of ways this order was split for payment"""
         # return self._split_by
-        if self.db_results['ZI_SPLIT']:
-            return self.db_results['ZI_SPLIT']
+        if self.db_results["ZI_SPLIT"]:
+            return self.db_results["ZI_SPLIT"]
         # orders that have no splits return 0 for ZI_SPLIT instead of 1
         return 1
 
@@ -271,7 +369,7 @@ class PaidOrderSplit(TouchBistroDBObject):
         """Returns a Python Datetime object with local timezone corresponding
         to the time that the order was seated, if available, paid otherwise"""
         try:
-            return cocoa_2_datetime(self.db_results['ZSEATEDDATE'])
+            return cocoa_2_datetime(self.db_results["ZSEATEDDATE"])
         except TypeError:
             return None
 
@@ -280,14 +378,14 @@ class PaidOrderSplit(TouchBistroDBObject):
         """Returns a Python Datetime object with local timezone corresponding
         to the time that the order was seated, if available, paid otherwise"""
         try:
-            return cocoa_2_datetime(self.db_results['ZPAYDATE'])
+            return cocoa_2_datetime(self.db_results["ZPAYDATE"])
         except TypeError:
             return None
 
     @property
     def order_type_id(self):
         "Returns the value of ZI_TAKEOUTTYPE as an integer (or None)"
-        return self.db_results['ZI_TAKEOUTTYPE']
+        return self.db_results["ZI_TAKEOUTTYPE"]
 
     @property
     def order_type(self):
@@ -298,58 +396,54 @@ class PaidOrderSplit(TouchBistroDBObject):
     def custom_takeout_type(self):
         "Returns the custom takeout type associated with a takeout order"
         try:
-            return self.db_results['CUSTOMTAKEOUTTYPE']
+            return self.db_results["CUSTOMTAKEOUTTYPE"]
         except KeyError:
             return None
 
     @property
     def payment_group_id(self):
         "Returns the ID for the payment group associated with this order"
-        return self.db_results['ZPAYMENTS']
+        return self.db_results["ZPAYMENTS"]
 
     @property
     def table_order_id(self):
         """Depending on how splits are closed, the ZTABLEORDER column may be
         populated with another ZORDER order id that contains additional order
         line items, this is the ID for that order."""
-        return self.db_results['ZTABLEORDER']
+        return self.db_results["ZTABLEORDER"]
 
     @property
     def outstanding_balance(self):
         """Returns the outstanding balance amount for the order"""
-        return self.db_results['ZOUTSTANDINGBALANCE']
+        return self.db_results["ZOUTSTANDINGBALANCE"]
 
     @property
     def loyalty_account_name(self):
         """Returns the name associated with a Loyalty account used to pay the
         order (if that was the case)"""
-        return self.db_results['ZLOYALTYACCOUNTNAME']
+        return self.db_results["ZLOYALTYACCOUNTNAME"]
 
     @property
     def loyalty_credit_balance(self):
         """Returns the credit balance of the Loyalty account used to pay the
         order (if that was the case)"""
-        return self.db_results['ZLOYALTYCREDITBALANCE']
+        return self.db_results["ZLOYALTYCREDITBALANCE"]
 
     @property
     def loyalty_point_balance(self):
         """Returns the point balance of the Loyalty account used to pay the
         order (if that was the case)"""
-        return self.db_results['ZLOYALTYPOINTSBALANCE']
+        return self.db_results["ZLOYALTYPOINTSBALANCE"]
 
     @property
     def waiter_uuid(self):
         """Returns the UUID corresponding to the waiter for this PaidOrder"""
-        return self.db_results['ZWAITERUUID']
+        return self.db_results["ZWAITERUUID"]
 
     @property
     def waiter(self):
         """Return a waiter object corresponding to the paid order"""
-        return Waiter(
-            self._db_location,
-            waiter_uuid=self.waiter_uuid,
-            parent=self
-        )
+        return Waiter(self._db_location, waiter_uuid=self.waiter_uuid, parent=self)
 
     @property
     def waiter_name(self):
@@ -362,33 +456,31 @@ class PaidOrderSplit(TouchBistroDBObject):
     @property
     def stack_tax_2_on_tax_1(self):
         """Return True if tax 2 should be stacked on tax 1 (tax on tax)"""
-        if self.db_results['ZI_TAX2ONTAX1']:
+        if self.db_results["ZI_TAX2ONTAX1"]:
             return True
         return False
 
     @property
     def tax_rate_1(self):
         """Returns tax rate 1 (ZI_TAX1) column, as a decimal float"""
-        return self.db_results['ZI_TAX1']
+        return self.db_results["ZI_TAX1"]
 
     @property
     def tax_rate_2(self):
         """Returns tax rate 2 (ZI_TAX2) column, as a decimal float"""
-        return self.db_results['ZI_TAX2']
+        return self.db_results["ZI_TAX2"]
 
     @property
     def tax_rate_3(self):
         """Returns tax rate 3 (ZI_TAX3) column, as a decimal float"""
-        return self.db_results['ZI_TAX3']
+        return self.db_results["ZI_TAX3"]
 
     @property
     def order_items(self):
         "Lazy-load order items on the first attempt to read them, then cache"
         if self._order_items is None:
             self._order_items = OrderItemList(
-                self._db_location,
-                order_id=self.order_id,
-                parent=self
+                self._db_location, order_id=self.order_id, parent=self
             )
             if self.table_order_id:
                 self._order_items.extend(
@@ -396,8 +488,9 @@ class PaidOrderSplit(TouchBistroDBObject):
                         self._db_location,
                         order_id=self.table_order_id,
                         table_split=True,
-                        parent=self
-                    ))
+                        parent=self,
+                    )
+                )
         return self._order_items
 
     @property
@@ -405,9 +498,7 @@ class PaidOrderSplit(TouchBistroDBObject):
         "Lazy-load Payment objects for this order and cache them internally"
         if self._payments is None:
             self._payments = PaymentGroup(
-                self._db_location,
-                payment_group_id=self.payment_group_id,
-                parent=self
+                self._db_location, payment_group_id=self.payment_group_id, parent=self
             )
         return self._payments
 
@@ -425,8 +516,7 @@ class PaidOrderSplit(TouchBistroDBObject):
                 ctx.rounding = decimal.ROUND_HALF_UP
                 taxes = decimal.Decimal(0.0)
                 for order in self.order_items:
-                    taxes += decimal.Decimal(
-                        self._calc_tax_on_order_item(order))
+                    taxes += decimal.Decimal(self._calc_tax_on_order_item(order))
                 total = float(taxes.to_integral_value()) / 100
                 self.log.debug("total tax on order: %3.2f", total)
                 self._taxes = total
@@ -480,12 +570,65 @@ class PaidOrderSplit(TouchBistroDBObject):
             output[category] = gross[category] + discounts.get(category, 0.0)
         return output
 
+    def waiter_statistics(self):
+        """Returns a dictionary representing waiter-related sales data for all
+        splits nested under this Order. The dictionary has a key for each
+        waiter's name involved in ordering items, along with a nested
+        dictionary with these statistics:
+
+        - num_items: Number of items rung in across all splits
+        - gross: Gross dollar value of all items including modifiers
+        - net: Net dollar value of all items after discounts
+        - tips: a pro-rata portion of tips attributed to the waiter
+
+        Tips are calculated by taking the gross amount of items rung in by
+        a waiter, and weighting the total tips collected on this split pro-rata
+        based on the portion of the sales rung in by each waiter.
+
+        """
+        stats = {}
+        total_sales = 0.0  # used for pro-rata tip attribution
+        for oi in self.order_items:
+            if oi.waiter_name not in stats:
+                stats[oi.waiter_name] = {
+                    "num_items": 0,
+                    "gross": 0.0,
+                    "net": 0.0,
+                    "tips": 0.0,
+                    "payments": 0,
+                    "first_item_time": oi.datetime,
+                }
+            stats[oi.waiter_name]["num_items"] += oi.quantity
+            stats[oi.waiter_name]["gross"] += oi.gross
+            stats[oi.waiter_name]["net"] += oi.subtotal()
+            total_sales += oi.gross  # we use gross because discounted items count
+        tips = self.payments.total_tips()
+        if self.waiter_name not in stats:
+            stats[self.waiter_name] = {
+                "num_items": 0,
+                "gross": 0.0,
+                "net": 0.0,
+                "tips": 0.0,
+                "payments": 0,
+            }
+        stats[self.waiter_name]["payments"] += len(self.payments)
+        for waiter in stats.keys():
+            stats[waiter]["tips"] = round(
+                tips * stats[waiter]["gross"] / total_sales, 2
+            )
+        return stats
+
     def _calc_tax_on_order_item(self, order_item):
         """Given an OrderItem, calculate the tax on the item, in CENTS"""
-        return (1 - order_item.discount_rate()) * (
-            self._order_item_tax_1(order_item) +
-            self._order_item_tax_2(order_item) +
-            self._order_item_tax_3(order_item)) * 100
+        return (
+            (1 - order_item.discount_rate())
+            * (
+                self._order_item_tax_1(order_item)
+                + self._order_item_tax_2(order_item)
+                + self._order_item_tax_3(order_item)
+            )
+            * 100
+        )
 
     def _order_item_tax_1(self, order_item):
         """Return the tax1 amount for a given order item"""
@@ -505,7 +648,7 @@ class PaidOrderSplit(TouchBistroDBObject):
     def receipt_form(self):
         """Prints the order in a receipt-like format"""
         try:
-            datetime = self.datetime.strftime('%Y-%m-%d %I:%M:%S %p')
+            datetime = self.datetime.strftime("%Y-%m-%d %I:%M:%S %p")
         except AttributeError:
             datetime = "None"
         header = f"DETAILS FOR ORDER #{self._order_number}"
@@ -538,11 +681,11 @@ class PaidOrderSplit(TouchBistroDBObject):
         if self.loyalty_account_name:
             output += f"Loyalty Customer: {self.loyalty_account_name}\n"
         if self.loyalty_credit_balance:
-            output += (f"Loyalty Credit Balance: "
-                       f"${self.loyalty_credit_balance:3.2f}\n")
+            output += (
+                f"Loyalty Credit Balance: " f"${self.loyalty_credit_balance:3.2f}\n"
+            )
         if self.loyalty_point_balance:
-            output += (f"Loyalty Point Balance: "
-                       f"${self.loyalty_point_balance:3.2f}\n")
+            output += f"Loyalty Point Balance: " f"${self.loyalty_point_balance:3.2f}\n"
         return output
 
     def summary(self):
@@ -558,25 +701,23 @@ class PaidOrderSplit(TouchBistroDBObject):
 
         """
         output = super(PaidOrderSplit, self).summary()
-        output['sales_summary'] = {
-            'gross_sales_by_sales_category':
-            self.gross_sales_by_sales_category(),
-            'discounts_by_sales_category':
-            self.discounts_by_sales_category(),
-            'net_sales_by_sales_category':
-            self.net_sales_by_sales_category()
+        output["sales_summary"] = {
+            "gross_sales_by_sales_category": self.gross_sales_by_sales_category(),
+            "discounts_by_sales_category": self.discounts_by_sales_category(),
+            "net_sales_by_sales_category": self.net_sales_by_sales_category(),
         }
-        output['order_items'] = self.order_items.summary()
-        output['payments'] = self.payments.summary()
+        output["order_items"] = self.order_items.summary()
+        output["payments"] = self.payments.summary()
         # these are payment fields that are part of the base order, not from
         # ZPAYMENTS.
         loyalty_fields = [
-            'loyalty_account_name', 'loyalty_credit_balance',
-            'loyalty_point_balance'
+            "loyalty_account_name",
+            "loyalty_credit_balance",
+            "loyalty_point_balance",
         ]
-        output['meta']['loyalty_info'] = dict()
+        output["meta"]["loyalty_info"] = dict()
         for field in loyalty_fields:
-            output['meta']['loyalty_info'][field] = getattr(self, field)
+            output["meta"]["loyalty_info"][field] = getattr(self, field)
         return output
 
 
@@ -590,13 +731,14 @@ class OrderItemList(TouchBistroObjectList):
         - table_split (optional, defaults to False) set true for order items
           brought in through the ZTABLEORDER column in ZPAIDORDER.
     """
+
     #: The ORDERITEMS table has a version number that changes with each
     #: release. Unfortunately the version also changes column names while the
     #: structure seems to stay identical. This class variable will be
     #: incremented from the base value set below until we find a table version
     #: or run out of attempts. If we succeed, subsequent uses of the class
     #: will start at the correct version and not need subsequent attempts.
-    __TBL_VERSION = 54
+    __TBL_VERSION = 80
     #: Number of incremental attempts to get data out of this table.
     ATTEMPTS = 100
 
@@ -611,7 +753,7 @@ class OrderItemList(TouchBistroObjectList):
         ORDER BY ZORDERITEM.ZI_INDEX ASC
     """
 
-    QUERY_BINDING_ATTRIBUTES = ['order_id']
+    QUERY_BINDING_ATTRIBUTES = ["order_id"]
 
     def subtotal(self):
         "Returns the total value of all order items after discounts/modifiers"
@@ -624,9 +766,10 @@ class OrderItemList(TouchBistroObjectList):
         "Convert a DB row into an OrderItem"
         return OrderItem(
             self._db_location,
-            order_item_id=row['ORDERITEM_ID'],
-            table_split=self.kwargs.get('table_split', False),
-            parent=self.parent)
+            order_item_id=row["ORDERITEM_ID"],
+            table_split=self.kwargs.get("table_split", False),
+            parent=self.parent,
+        )
 
     def _fetch_from_db(self):
         """Returns the db result rows for the QUERY"""
@@ -635,11 +778,9 @@ class OrderItemList(TouchBistroObjectList):
             try:
                 query = self.QUERY.format(
                     tbl_id=OrderItemList.__TBL_VERSION,
-                    col_id=OrderItemList.__TBL_VERSION + 1)
-                return self.db_handle.cursor().execute(
-                    query,
-                    self.bindings
-                ).fetchall()
+                    col_id=OrderItemList.__TBL_VERSION + 1,
+                )
+                return self.db_handle.cursor().execute(query, self.bindings).fetchall()
             except sqlite3.OperationalError as err:
                 last_err = err
             OrderItemList.__TBL_VERSION += 1
@@ -658,8 +799,15 @@ class OrderItem(TouchBistroDBObject):
     Results are a multi-column format containing details about the item.
     """
 
-    META_ATTRIBUTES = ['quantity', 'name', 'sales_category', 'price',
-                       'waiter_name', 'was_sent', 'datetime']
+    META_ATTRIBUTES = [
+        "quantity",
+        "name",
+        "sales_category",
+        "price",
+        "waiter_name",
+        "was_sent",
+        "datetime",
+    ]
 
     QUERY = """SELECT
             ZORDERITEM.*,
@@ -671,11 +819,11 @@ class OrderItem(TouchBistroDBObject):
         WHERE ZORDERITEM.Z_PK = :order_item_id
     """
 
-    QUERY_BINDING_ATTRIBUTES = ['order_item_id']
+    QUERY_BINDING_ATTRIBUTES = ["order_item_id"]
 
     def __init__(self, db_location, **kwargs):
         super(OrderItem, self).__init__(db_location, **kwargs)
-        self._table_split = kwargs.get('table_split', False)
+        self._table_split = kwargs.get("table_split", False)
         self._discounts = None
         self._modifiers = None
         self._menu_item = None
@@ -687,7 +835,7 @@ class OrderItem(TouchBistroDBObject):
         if self._table_split:
             split_by = self.parent.table_split_by
         try:
-            return self.db_results['ZI_QUANTITY'] / split_by
+            return self.db_results["ZI_QUANTITY"] / split_by
         except ZeroDivisionError:
             return 1
 
@@ -696,23 +844,23 @@ class OrderItem(TouchBistroDBObject):
         "Return the open price for the menu item (if applicable)"
         # TODO: Find orders with open items to determine how this works with
         # quantity multipliers and splits, if possible.
-        return self.db_results['ZI_OPENPRICE']
+        return self.db_results["ZI_OPENPRICE"]
 
     @property
     def waiter_name(self):
         "Return the customer-facing waiter name associated with the order item"
-        return self.db_results['WAITERNAME']
+        return self.db_results["WAITERNAME"]
 
     @property
     def course_number(self):
         """Return the course number for the menu item."""
-        return self.db_results['ITEM_COURSE']
+        return self.db_results["ITEM_COURSE"]
 
     @property
     def datetime(self):
         """Return the date and time that the item was added to the order"""
-        if self.db_results['ZCREATEDATE']:
-            return cocoa_2_datetime(self.db_results['ZCREATEDATE'])
+        if self.db_results["ZCREATEDATE"]:
+            return cocoa_2_datetime(self.db_results["ZCREATEDATE"])
         return None
 
     @property
@@ -720,7 +868,7 @@ class OrderItem(TouchBistroDBObject):
         """Returns a Python Datetime object with local timezone corresponding
         to the time that the item was sent to the kitchen/bar (or None)"""
         if self.was_sent:
-            return cocoa_2_datetime(self.db_results['ZSENTTIME'])
+            return cocoa_2_datetime(self.db_results["ZSENTTIME"])
         return None
 
     @property
@@ -729,8 +877,9 @@ class OrderItem(TouchBistroDBObject):
         if self._menu_item is None:
             self._menu_item = MenuItem(
                 self._db_location,
-                menuitem_uuid=self.db_results['ZMENUITEMUUID'],
-                parent=self)
+                menuitem_uuid=self.db_results["ZMENUITEMUUID"],
+                parent=self,
+            )
         return self._menu_item
 
     @property
@@ -756,8 +905,7 @@ class OrderItem(TouchBistroDBObject):
         else:
             output[self.sales_category] = self.price
         for modifier in self.modifiers:
-            output = modifier_sales_category_amounts(
-                modifier, output=output)
+            output = modifier_sales_category_amounts(modifier, output=output)
         return scrub_zero_amounts(output)
 
     def discounts_by_sales_category(self, output=None):
@@ -775,10 +923,10 @@ class OrderItem(TouchBistroDBObject):
     def summary(self):
         """Returns a dictionary summary of this order item"""
         summary = super(OrderItem, self).summary()
-        summary['menu_item'] = self.menu_item.summary()
-        summary['modifiers'] = self.modifiers.summary()
-        summary['discounts'] = self.discounts.summary()
-        summary['taxes'] = self.tax_summary()
+        summary["menu_item"] = self.menu_item.summary()
+        summary["modifiers"] = self.modifiers.summary()
+        summary["discounts"] = self.discounts.summary()
+        summary["taxes"] = self.tax_summary()
         return summary
 
     def receipt_form(self):
@@ -791,14 +939,13 @@ class OrderItem(TouchBistroDBObject):
         """
         output = ""
         name = ""
-        qty = f"{self.quantity:0.2f}".rstrip('0.')
+        qty = f"{self.quantity:0.2f}".rstrip("0.")
         # if self.quantity % 1 > 0.0:
         #    name += f"{self.quantity:.2f} x "
         if self.quantity != 1:
             name += f"{qty} x "
         name += self.menu_item.name
-        output += "{:38s} ${:3.2f}\n".format(
-            name, self.price)
+        output += "{:38s} ${:3.2f}\n".format(name, self.price)
         has_price_mod = False
         for modifier in self.modifiers:
             output += modifier.receipt_form()
@@ -809,13 +956,13 @@ class OrderItem(TouchBistroDBObject):
             if discount.amount:
                 has_price_mod = True
         if has_price_mod:
-            output += ' ' * 23 + f"Item Subtotal:  ${self.subtotal():3.2f}\n"
+            output += " " * 23 + f"Item Subtotal:  ${self.subtotal():3.2f}\n"
         return output
 
     @property
     def was_sent(self):
         "Returns True if the menu item was sent to the kitchen/bar"
-        if self.db_results['ZI_SENT']:
+        if self.db_results["ZI_SENT"]:
             return True
         return False
 
@@ -837,9 +984,9 @@ class OrderItem(TouchBistroDBObject):
     def tax_summary(self):
         """Returns a dictionary summary of taxes for this OrderItem"""
         return {
-            'tax1_subtotal': self.tax1_subtotal(),
-            'tax2_subtotal': self.tax2_subtotal(),
-            'tax3_subtotal': self.tax3_subtotal()
+            "tax1_subtotal": self.tax1_subtotal(),
+            "tax2_subtotal": self.tax2_subtotal(),
+            "tax3_subtotal": self.tax3_subtotal(),
         }
 
     def tax1_subtotal(self):
@@ -895,7 +1042,7 @@ class OrderItem(TouchBistroDBObject):
         item after discounts. A floating point value between 0 and 1."""
         if self.discounts:
             try:
-                return - self.discounts.total() / self.gross
+                return -self.discounts.total() / self.gross
             except ZeroDivisionError:
                 return 0.0
         return 0.0
@@ -905,9 +1052,7 @@ class OrderItem(TouchBistroDBObject):
         """Returns a list of ItemDiscount objects for this order item"""
         if self._discounts is None:
             self._discounts = ItemDiscountList(
-                self._db_location,
-                order_item_id=self.object_id,
-                parent=self
+                self._db_location, order_item_id=self.object_id, parent=self
             )
         return self._discounts
 
@@ -916,8 +1061,6 @@ class OrderItem(TouchBistroDBObject):
         """Returns a list of ItemModifier objects for this order item"""
         if self._modifiers is None:
             self._modifiers = ItemModifierList(
-                self._db_location,
-                order_item_id=self.object_id,
-                parent=self
+                self._db_location, order_item_id=self.object_id, parent=self
             )
         return self._modifiers
