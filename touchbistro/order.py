@@ -70,6 +70,29 @@ def get_orders_for_date_range(
     )
 
 
+def get_order_masters_for_date_range(
+    db_location, earliest_date, latest_date, day_boundary="02:00:00"
+):
+    """Given an earliest and a latest date, return an iterable of Order objects
+    containing all the orders for that date period. latest_date is inclusive,
+    so if you specify 2020-05-31 as the latest_date, all orders from that day
+    will be included in the results. Differs from `get_orders_for_date_range()`
+    in that instead of returning a list of splits, it's returning a list of the
+    parent Order objects that contain all the splits for each order.
+
+    Dates should be in the YYYY-MM-DD format. The local timezone will be used
+    by default. Use the day_boundary parameter to set a reasonable time to
+    transition from one day to the next, if your restaurant has cash
+    transactions after midnight (default is 02:00:00).
+    """
+    return OrderMasterTimeRange(
+        db_location,
+        earliest_time=to_local_datetime(earliest_date + " " + day_boundary),
+        cutoff_time=to_local_datetime(latest_date + " " + day_boundary)
+        + timedelta(days=1),
+    )
+
+
 def scrub_zero_amounts(input_dict):
     """Given a dictionary like we use for the sales category breakdowns, with
     values corresponding to dollar amounts, scrub any keys out of the dict with
@@ -135,6 +158,34 @@ class OrderTimeRange(TouchBistroObjectList):
         )
 
 
+class OrderMasterTimeRange(OrderTimeRange):
+    """Use this class to get a list of orders for a given date/time range
+
+    kwargs:
+        - earliest_time (datetime object)
+        - cutoff_time (datetime object)
+    """
+
+    #: Query to get a list of modifier uuids for this order item
+    QUERY = """SELECT
+            ZORDER.ZORDERNUMBER, ZORDER.Z_PK
+        FROM ZPAIDORDER, ZORDER
+        WHERE
+            ZPAIDORDER.ZPAYDATE >= :earliest_time AND
+            ZPAIDORDER.ZPAYDATE < :cutoff_time AND
+            ZORDER.Z_PK = ZPAIDORDER.ZORDER
+        ORDER BY ZORDER.ZORDERNUMBER ASC
+        """
+
+    def _vivify_db_row(self, row):
+        return Order(
+            self._db_location,
+            order_number=row["ZORDERNUMBER"],
+            order_key=row["Z_PK"],
+            parent=self.parent,
+        )
+
+
 class Order(TouchBistroObjectList):
     """Get information about a TouchBistro order based on its public-facing
     order number. Order is a parent to one or more PaidOrders.
@@ -152,8 +203,19 @@ class Order(TouchBistroObjectList):
 
     @property
     def order_number(self):
-        "Returns the order number corresponding to this object, if supplied"
+        """Returns the public-facing order number for this order. Note that
+        these order numbers roll over every 10,000 orders and aren't unique in
+        larger datasets. Use `order_key` instead if you need a key."""
         return self.kwargs.get("order_number")
+
+    @property
+    def order_key(self):
+        """Returns the unique order key corresponding to this object, if
+        supplied at instantiation. This is the Z_PK field from the ZORDER
+        table, not the customer-facing order number (which isn't unique).
+        This is provided for use it data aggregation where a unique key
+        value is important."""
+        return self.kwargs.get("order_key")
 
     def _vivify_db_row(self, row):
         return PaidOrderSplit(
@@ -371,7 +433,7 @@ class PaidOrderSplit(TouchBistroDBObject):
         try:
             return cocoa_2_datetime(self.db_results["ZSEATEDDATE"])
         except TypeError:
-            return None
+            return self.datetime
 
     @property
     def paid_datetime(self):
@@ -613,9 +675,12 @@ class PaidOrderSplit(TouchBistroDBObject):
             }
         stats[self.waiter_name]["payments"] += len(self.payments)
         for waiter in stats.keys():
-            stats[waiter]["tips"] = round(
-                tips * stats[waiter]["gross"] / total_sales, 2
-            )
+            if total_sales > 0:
+                stats[waiter]["tips"] = round(
+                    tips * stats[waiter]["gross"] / total_sales, 2
+                )
+            else:
+                stats[waiter]["tips"] = 0
         return stats
 
     def _calc_tax_on_order_item(self, order_item):
