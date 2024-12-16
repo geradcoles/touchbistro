@@ -250,11 +250,14 @@ class ItemModifier(TouchBistroDBObject):
         For non-menu-based modifiers, always returns the full price of the
         modifier, including any nested entities."""
         subtotal = 0.0
-        if self.is_menu_based() and self.menu_item.exclude_tax1:
-            pass
-        elif not self.parent.menu_item.exclude_tax1:
-            # tax follows the parent OrderItem
-            subtotal += self.price
+        if self.is_menu_based():
+            if not self.menu_item.exclude_tax1:
+                subtotal += self.price
+        else:
+            # not menu based
+            if not self.parent.menu_item.exclude_tax1:
+                # tax follows the parent OrderItem
+                subtotal += self.price
         for modifier in self.nested_modifiers:
             subtotal += modifier.tax1_taxable_subtotal
         return subtotal
@@ -266,11 +269,14 @@ class ItemModifier(TouchBistroDBObject):
         For non-menu-based modifiers, always returns the full price of the
         modifier, including any nested entities."""
         subtotal = 0.0
-        if self.is_menu_based() and self.menu_item.exclude_tax2:
-            pass
-        elif not self.parent.menu_item.exclude_tax2:
-            # tax follows the parent OrderItem
-            subtotal += self.price
+        if self.is_menu_based():
+            if not self.menu_item.exclude_tax2:
+                subtotal += self.price
+        else:
+            # not menu based
+            if not self.parent.menu_item.exclude_tax2:
+                # tax follows the parent OrderItem
+                subtotal += self.price
         for modifier in self.nested_modifiers:
             subtotal += modifier.tax2_taxable_subtotal
         return subtotal
@@ -282,11 +288,14 @@ class ItemModifier(TouchBistroDBObject):
         For non-menu-based modifiers, always returns the full price of the
         modifier, including any nested entities."""
         subtotal = 0.0
-        if self.is_menu_based() and self.menu_item.exclude_tax3:
-            pass
-        elif not self.parent.menu_item.exclude_tax3:
-            # tax follows the parent OrderItem
-            subtotal += self.price
+        if self.is_menu_based():
+            if not self.menu_item.exclude_tax3:
+                subtotal += self.price
+        else:
+            # not menu based
+            if not self.parent.menu_item.exclude_tax3:
+                # tax follows the parent OrderItem
+                subtotal += self.price
         for modifier in self.nested_modifiers:
             subtotal += modifier.tax3_taxable_subtotal
         return subtotal
