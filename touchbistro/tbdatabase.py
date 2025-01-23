@@ -99,6 +99,13 @@ class TouchBistroDBQueryResult():
         objects from another, even when they share the same class"""
         return self.kwargs.get('object_type_suffix', '')
 
+    def close_db(self):
+        """Provides a method to force the db connection closed in situations where leaving it open might cause problems."""
+        if TouchBistroDBQueryResult.__db_handle is None:
+            return True
+        TouchBistroDBQueryResult.__db_handle.close()
+        TouchBistroDBQueryResult.__db_handle = None
+
     def _fetch_from_db(self):
         """Returns the db result rows for the QUERY"""
         return self.db_handle.cursor().execute(
